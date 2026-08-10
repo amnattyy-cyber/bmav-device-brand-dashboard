@@ -1,21 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import data from "./dashboard-data.json";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DataRow } from "./google-sheet-data";
 
 type Metric = "net" | "qty";
 type Period = "mtd" | "day";
-type DataRow = {
-  brand?: string;
-  code?: string;
-  shop?: string;
-  targetQty: number;
-  targetNet: number;
-  dailyQty: number[];
-  dailyNet: number[];
-  previousDailyQty?: number[];
-  previousDailyNet?: number[];
-};
+type SourceStatus = "loading" | "live" | "fallback";
 
 const brandColors: Record<string, string> = {
   IPHONE: "#7c3aed", SAMSUNG: "#2563eb", IPAD: "#8b5cf6", VIVO: "#06b6d4",
@@ -31,9 +21,6 @@ const compactChart = (value: number) => value >= 1_000_000
   : value >= 1_000
     ? `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1)}K`
     : integer.format(value);
-const latestDay = Number(data.latest.slice(-2));
-const formatDate = (day: number) => `2026-08-${String(day).padStart(2, "0")}`;
-const thaiDate = (day: number) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${formatDate(day)}T00:00:00+07:00`));
 const sumTo = (values: number[], day: number) => values.slice(0, day).reduce((sum, value) => sum + value, 0);
 
 const emptyRow = (): DataRow => ({ targetQty: 0, targetNet: 0, dailyQty: Array(31).fill(0), dailyNet: Array(31).fill(0), previousDailyQty: Array(31).fill(0), previousDailyNet: Array(31).fill(0) });
@@ -65,12 +52,43 @@ function momTone(current: number, previous: number) {
 }
 
 export default function Home() {
+  const [data, setData] = useState(fallbackData);
+  const [sourceStatus, setSourceStatus] = useState<SourceStatus>("loading");
+  const [lastSync, setLastSync] = useState<Date | null>(null);
   const [metric, setMetric] = useState<Metric>("net");
   const [period, setPeriod] = useState<Period>("mtd");
   const [selectedBrand, setSelectedBrand] = useState("ALL");
   const [selectedShop, setSelectedShop] = useState("ALL");
-  const [selectedDay, setSelectedDay] = useState(latestDay);
+  const [selectedDay, setSelectedDay] = useState(Number(fallbackData.latest.slice(-2)));
   const [showAllShops, setShowAllShops] = useState(false);
+  const previousLatestDay = useRef(Number(fallbackData.latest.slice(-2)));
+  const latestDay = Number(data.latest.slice(-2));
+  const monthPrefix = data.latest.slice(0, 7);
+  const formatDate = useCallback((day: number) => `${monthPrefix}-${String(day).padStart(2, "0")}`, [monthPrefix]);
+  const thaiDate = useCallback((day: number) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${formatDate(day)}T00:00:00+07:00`)), [formatDate]);
+
+  const refreshData = useCallback(async () => {
+    try {
+      const liveData = await loadGoogleSheetData();
+      setData(liveData);
+      setSourceStatus("live");
+      setLastSync(new Date());
+    } catch (error) {
+      console.warn("Google Sheet refresh failed; using the latest bundled dashboard data.", error);
+      setSourceStatus("fallback");
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshData();
+    const timer = window.setInterval(() => void refreshData(), sheetRefreshInterval);
+    return () => window.clearInterval(timer);
+  }, [refreshData]);
+
+  useEffect(() => {
+    setSelectedDay((current) => current === previousLatestDay.current ? latestDay : Math.min(current, latestDay));
+    previousLatestDay.current = latestDay;
+  }, [latestDay]);
 
   const shopOptions = useMemo(() => {
     const rows = selectedBrand === "ALL" ? data.shops : data.shops.filter((row) => row.brand === selectedBrand);
@@ -147,7 +165,7 @@ export default function Home() {
       <section className="hero shell">
         <div className="hero-copy">
           <div className="eyebrow"><span className="live-dot" /> BMAV • DEVICE PERFORMANCE</div>
-          <h1>Device by Brand<br /><span>August 2026</span></h1>
+          <h1>Device by Brand<br /><span>{data.month}</span></h1>
           <p>Dashboard ที่ Focus ด้าน Net Amount พร้อมสลับดู Qty, เลือก Brand, สาขา, วันที่ขาย และมุมมอง Daily หรือ MTD ได้ในหน้าเดียว</p>
           <a className="download-button" href="https://bmav-device-brand-aug26.amnattyy.chatgpt.site/BMAV_Device_By_Brand_Dashboard.xlsx">ดาวน์โหลด Excel <span aria-hidden="true">↓</span></a>
         </div>
@@ -165,7 +183,7 @@ export default function Home() {
         <div className="filter-group"><label htmlFor="brand-filter">Brand</label><select id="brand-filter" value={selectedBrand} onChange={(event) => chooseBrand(event.target.value)}><option value="ALL">ALL BRANDS</option>{data.brands.map((row) => <option key={row.brand} value={row.brand}>{row.brand}</option>)}</select></div>
         <div className="filter-group shop-filter"><label htmlFor="shop-filter">สาขา</label><select id="shop-filter" value={selectedShop} onChange={(event) => { setSelectedShop(event.target.value); setShowAllShops(false); }}><option value="ALL">ทุกสาขาที่มี Target</option>{shopOptions.map(([code, shop]) => <option key={code} value={code}>{shop}</option>)}</select></div>
         <div className="filter-group"><span className="filter-label">ช่วงเวลา</span><div className="segmented"><button className={period === "mtd" ? "selected" : ""} onClick={() => setPeriod("mtd")}>MTD</button><button className={period === "day" ? "selected" : ""} onClick={() => setPeriod("day")}>Daily</button></div></div>
-        <div className="filter-group"><label htmlFor="date-filter">วันที่ขาย</label><input id="date-filter" type="date" min="2026-08-01" max={data.latest} value={formatDate(selectedDay)} onChange={(event) => setSelectedDay(Number(event.target.value.slice(-2)))} /></div>
+        <div className="filter-group"><label htmlFor="date-filter">วันที่ขาย</label><input id="date-filter" type="date" min={`${monthPrefix}-01`} max={data.latest} value={formatDate(selectedDay)} onChange={(event) => setSelectedDay(Number(event.target.value.slice(-2)))} /></div>
       </section>
 
       <section className="context-line shell"><span>{metricLabel}</span><b>{selectedBrand === "ALL" ? "ALL BRANDS" : selectedBrand}</b><b>{shopName}</b><b>{period === "mtd" ? "MTD" : "Daily"} ณ {thaiDate(selectedDay)}</b></section>
@@ -211,7 +229,7 @@ export default function Home() {
         {shopViews.length > 10 && <button className="show-more" onClick={() => setShowAllShops(!showAllShops)}>{showAllShops ? "แสดง 10 อันดับแรก" : `ดูครบทั้ง ${shopViews.length} สาขา`} <span>{showAllShops ? "↑" : "↓"}</span></button>}
       </section>
 
-      <footer className="shell"><div><strong>BMAV</strong><span>Device by Brand Dashboard</span></div><p>Source: Target & Sales data • Last updated {thaiDate(latestDay)}</p></footer>
+      <footer className="shell"><div><strong>BMAV</strong><span>Device by Brand Dashboard</span></div><p><span className={`source-badge ${sourceStatus}`}>{sourceStatus === "live" ? "LIVE · Google Sheet" : sourceStatus === "loading" ? "กำลังอัปเดต" : "ข้อมูลสำรอง"}</span> Last updated {thaiDate(latestDay)}{lastSync ? ` · Sync ${lastSync.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}` : ""}</p></footer>
     </main>
   );
 }
