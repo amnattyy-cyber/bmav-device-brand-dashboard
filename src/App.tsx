@@ -24,6 +24,11 @@ const brandColors: Record<string, string> = {
 const number = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 1 });
 const integer = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 });
 const compact = (value: number) => value >= 1_000_000 ? `${(value / 1_000_000).toFixed(2)}M` : integer.format(value);
+const compactChart = (value: number) => value >= 1_000_000
+  ? `${(value / 1_000_000).toFixed(2)}M`
+  : value >= 1_000
+    ? `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1)}K`
+    : integer.format(value);
 const latestDay = Number(data.latest.slice(-2));
 const formatDate = (day: number) => `2026-08-${String(day).padStart(2, "0")}`;
 const thaiDate = (day: number) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${formatDate(day)}T00:00:00+07:00`));
@@ -108,15 +113,12 @@ export default function Home() {
       .sort((a, b) => b.viewAchievement - a.viewAchievement);
   }, [metric, period, selectedBrand, selectedShop, selectedDay]);
 
-  const trend = useMemo(() => Array.from({ length: selectedDay }, (_, index) => {
-    const day = index + 1;
-    return {
-      day,
-      actual: period === "mtd" ? sumTo(dailyValues, day) : dailyValues[index] || 0,
-      runRate: (monthlyTarget / 31) * (period === "mtd" ? day : 1),
-    };
-  }), [dailyValues, monthlyTarget, period, selectedDay]);
-  const trendMax = Math.max(...trend.flatMap((item) => [item.actual, item.runRate]), 1);
+  const trend = useMemo(() => Array.from({ length: selectedDay }, (_, index) => ({
+    day: index + 1,
+    actual: dailyValues[index] || 0,
+  })), [dailyValues, selectedDay]);
+  const trendMax = Math.max(...trend.map((item) => item.actual), 1);
+  const trendTotal = sumTo(dailyValues, selectedDay);
   const selectedColor = selectedBrand === "ALL" ? "#7c3aed" : brandColors[selectedBrand] ?? "#7c3aed";
   const displayedShops = showAllShops ? shopViews : shopViews.slice(0, 10);
   const shopName = selectedShop === "ALL" ? "ทุกสาขา" : shopOptions.find(([code]) => code === selectedShop)?.[1] ?? selectedShop;
@@ -173,11 +175,11 @@ export default function Home() {
 
       <section className="section split-section shell">
         <div className="trend-panel panel">
-          <div className="panel-head"><div><span className="section-number">02</span><h2>Daily Trend</h2><p>{metricLabel} • {period === "mtd" ? "ยอดสะสม" : "ยอดขายรายวัน"} เทียบ Run Rate</p></div><div className="trend-legend"><span><i className="actual-dot" /> Actual</span><span><i className="run-dot" /> Run rate</span></div></div>
+          <div className="panel-head"><div><span className="section-number">02</span><h2>Daily Trend</h2><p>{metric === "net" ? "Net Amount" : "Qty"} • ยอดขายจริงรายวัน 1–{selectedDay} Aug</p></div><div className="trend-legend"><span><i className="actual-dot" /> Daily Sales</span></div></div>
           <div className="daily-chart" aria-label="กราฟยอดขายรายวัน">
-            {trend.map((item) => <div className="day-column" key={item.day}><div className="bar-space"><div className="run-bar" style={{ height: `${(item.runRate / trendMax) * 100}%` }} /><div className="actual-bar" style={{ height: `${(item.actual / trendMax) * 100}%`, background: selectedColor }}><span>{item.day === selectedDay ? (metric === "net" ? compact(item.actual) : number.format(item.actual)) : ""}</span></div></div><small>{item.day}</small></div>)}
+            {trend.map((item) => <div className="day-column" key={item.day} aria-label={`${item.day} Aug: ${displayValue(item.actual)}`}><div className="bar-space"><div className="actual-bar" title={`${item.day} Aug: ${displayValue(item.actual)}`} style={{ height: `${(item.actual / trendMax) * 100}%`, background: selectedColor }}><span>{metric === "net" ? compactChart(item.actual) : number.format(item.actual)}</span></div></div><small>{item.day}</small></div>)}
           </div>
-          <div className="trend-foot"><span>1 Aug</span><b>{period === "mtd" ? "ยอดสะสม" : "ยอดวันที่เลือก"} {displayValue(actual)}</b><span>{selectedDay} Aug</span></div>
+          <div className="trend-foot"><span>1 Aug</span><b>ยอดขายรวม 1–{selectedDay} Aug {displayValue(trendTotal)}</b><span>{selectedDay} Aug</span></div>
         </div>
         <aside className="focus-panel panel"><span className="section-number">NET FOCUS</span><h2>{metricLabel}</h2><p>{selectedBrand === "ALL" ? "ALL BRANDS" : selectedBrand} • {shopName}</p><div className="focus-meter"><span style={{ width: `${Math.min(achievement, 100)}%`, background: selectedColor }} /></div><div className="focus-stats"><span><small>Actual</small><strong>{displayValue(actual)}</strong><small>{period === "mtd" ? "MTD" : "Daily"}</small></span><span><small>Target</small><strong>{displayValue(target)}</strong><small>{period === "mtd" ? "MTD" : "Daily"}</small></span></div><div className="pace-note"><span>{period.toUpperCase()}</span><p>เลือกดูข้อมูลได้ถึงวันที่ <b>{thaiDate(latestDay)}</b> และสลับ Net Amount / Qty ได้ทันที</p></div></aside>
       </section>
