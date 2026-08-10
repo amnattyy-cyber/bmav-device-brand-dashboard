@@ -13,6 +13,8 @@ type DataRow = {
   targetNet: number;
   dailyQty: number[];
   dailyNet: number[];
+  previousDailyQty?: number[];
+  previousDailyNet?: number[];
 };
 
 const brandColors: Record<string, string> = {
@@ -34,12 +36,14 @@ const formatDate = (day: number) => `2026-08-${String(day).padStart(2, "0")}`;
 const thaiDate = (day: number) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${formatDate(day)}T00:00:00+07:00`));
 const sumTo = (values: number[], day: number) => values.slice(0, day).reduce((sum, value) => sum + value, 0);
 
-const emptyRow = (): DataRow => ({ targetQty: 0, targetNet: 0, dailyQty: Array(31).fill(0), dailyNet: Array(31).fill(0) });
+const emptyRow = (): DataRow => ({ targetQty: 0, targetNet: 0, dailyQty: Array(31).fill(0), dailyNet: Array(31).fill(0), previousDailyQty: Array(31).fill(0), previousDailyNet: Array(31).fill(0) });
 const combineRows = (rows: DataRow[]): DataRow => rows.reduce((total, row) => ({
   targetQty: total.targetQty + row.targetQty,
   targetNet: total.targetNet + row.targetNet,
   dailyQty: total.dailyQty.map((value, index) => value + (row.dailyQty[index] || 0)),
   dailyNet: total.dailyNet.map((value, index) => value + (row.dailyNet[index] || 0)),
+  previousDailyQty: total.previousDailyQty?.map((value, index) => value + (row.previousDailyQty?.[index] || 0)),
+  previousDailyNet: total.previousDailyNet?.map((value, index) => value + (row.previousDailyNet?.[index] || 0)),
 }), emptyRow());
 
 function tone(value: number) {
@@ -47,6 +51,17 @@ function tone(value: number) {
   if (value >= 70) return "good";
   if (value >= 40) return "watch";
   return "risk";
+}
+
+function momLabel(current: number, previous: number) {
+  if (!previous) return current > 0 ? "NEW" : "—";
+  const value = ((current - previous) / previous) * 100;
+  return `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
+}
+
+function momTone(current: number, previous: number) {
+  if (!previous) return current > 0 ? "mom-new" : "mom-neutral";
+  return current >= previous ? "mom-up" : "mom-down";
 }
 
 export default function Home() {
@@ -105,9 +120,11 @@ export default function Home() {
       .filter((row) => selectedShop === "ALL" || row.code === selectedShop)
       .map((row) => {
         const values = metric === "net" ? row.dailyNet : row.dailyQty;
+        const previousValues = metric === "net" ? (row.previousDailyNet ?? []) : (row.previousDailyQty ?? []);
         const rowTarget = ((metric === "net" ? row.targetNet : row.targetQty) / 31) * (period === "mtd" ? selectedDay : 1);
         const rowActual = period === "mtd" ? sumTo(values, selectedDay) : values[selectedDay - 1] || 0;
-        return { ...row, viewTarget: rowTarget, viewActual: rowActual, viewAchievement: rowTarget ? (rowActual / rowTarget) * 100 : 0 };
+        const rowPrevious = period === "mtd" ? sumTo(previousValues, selectedDay) : previousValues[selectedDay - 1] || 0;
+        return { ...row, viewTarget: rowTarget, viewActual: rowActual, viewPrevious: rowPrevious, viewAchievement: rowTarget ? (rowActual / rowTarget) * 100 : 0 };
       })
       .filter((row) => row.viewTarget > 0)
       .sort((a, b) => b.viewAchievement - a.viewAchievement);
@@ -185,9 +202,9 @@ export default function Home() {
       </section>
 
       <section className="section shell">
-        <div className="section-heading shop-heading"><div><span className="section-number">03</span><h2>Shop Performance</h2><p>{selectedBrand === "ALL" ? "สาขาที่มี Target ใน BMAV" : `เฉพาะสาขาที่มี Target ${selectedBrand}`}</p></div><span className="shop-count">{shopViews.length} สาขา</span></div>
-        <div className="shop-table-wrap"><table><thead><tr><th>อันดับ</th><th>สาขา</th><th>Target {metric === "net" ? "Net" : "Qty"}</th><th>Actual</th><th>Achievement</th><th>Gap</th></tr></thead><tbody>
-          {displayedShops.map((shop, index) => <tr key={shop.code}><td><span className={`rank ${index < 3 ? "top" : ""}`}>{index + 1}</span></td><td><strong>{shop.shop}</strong><small>{shop.code}</small></td><td>{displayValue(shop.viewTarget)}</td><td><b>{displayValue(shop.viewActual)}</b></td><td><div className="achievement-cell"><div><span style={{ width: `${Math.min(shop.viewAchievement, 100)}%` }} /></div><em className={tone(shop.viewAchievement)}>{shop.viewAchievement.toFixed(1)}%</em></div></td><td className={shop.viewActual - shop.viewTarget >= 0 ? "positive-gap" : "gap"}>{displayValue(shop.viewActual - shop.viewTarget)}</td></tr>)}
+        <div className="section-heading shop-heading"><div><span className="section-number">03</span><h2>Shop Performance</h2><p>{selectedBrand === "ALL" ? "สาขาที่มี Target ใน BMAV" : `เฉพาะสาขาที่มี Target ${selectedBrand}`} • MoM เทียบ Jul ช่วงเวลาเท่ากัน</p></div><span className="shop-count">{shopViews.length} สาขา</span></div>
+        <div className="shop-table-wrap"><table><thead><tr><th>อันดับ</th><th>สาขา</th><th>Target {metric === "net" ? "Net" : "Qty"}</th><th>Actual Aug</th><th>Actual Jul</th><th>MoM</th><th>Achievement</th><th>Gap</th></tr></thead><tbody>
+          {displayedShops.map((shop, index) => <tr key={shop.code}><td><span className={`rank ${index < 3 ? "top" : ""}`}>{index + 1}</span></td><td><strong>{shop.shop}</strong><small>{shop.code}</small></td><td>{displayValue(shop.viewTarget)}</td><td><b>{displayValue(shop.viewActual)}</b></td><td>{displayValue(shop.viewPrevious)}</td><td><span className={`mom-value ${momTone(shop.viewActual, shop.viewPrevious)}`}>{momLabel(shop.viewActual, shop.viewPrevious)}</span><small>{period === "mtd" ? `1–${selectedDay} Jul` : `${selectedDay} Jul`}</small></td><td><div className="achievement-cell"><div><span style={{ width: `${Math.min(shop.viewAchievement, 100)}%` }} /></div><em className={tone(shop.viewAchievement)}>{shop.viewAchievement.toFixed(1)}%</em></div></td><td className={shop.viewActual - shop.viewTarget >= 0 ? "positive-gap" : "gap"}>{displayValue(shop.viewActual - shop.viewTarget)}</td></tr>)}
         </tbody></table></div>
         {shopViews.length > 10 && <button className="show-more" onClick={() => setShowAllShops(!showAllShops)}>{showAllShops ? "แสดง 10 อันดับแรก" : `ดูครบทั้ง ${shopViews.length} สาขา`} <span>{showAllShops ? "↑" : "↓"}</span></button>}
       </section>
