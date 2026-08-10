@@ -23,7 +23,6 @@ const brandColors: Record<string, string> = {
 
 const number = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 1 });
 const integer = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 });
-const compact = (value: number) => value >= 1_000_000 ? `${(value / 1_000_000).toFixed(2)}M` : integer.format(value);
 const compactChart = (value: number) => value >= 1_000_000
   ? `${(value / 1_000_000).toFixed(2)}M`
   : value >= 1_000
@@ -153,7 +152,7 @@ export default function Home() {
   const { target, actual, achievement } = scopeMetrics;
   const metricLabel = metric === "net" ? "Net Amount" : "Quantity";
   const unit = metric === "net" ? "บาท" : "เครื่อง";
-  const displayValue = (value: number) => metric === "net" ? `฿${compact(value)}` : number.format(value);
+  const displayValue = (value: number) => metric === "net" ? `฿${integer.format(value)}` : number.format(value);
   const modeCopy = {
     day: { title: "Daily", target: "Target Daily", actual: "Actual Daily", achievement: "Daily Achievement", gap: "Daily Gap", short: "DAILY" },
     mtd: { title: "MTD", target: "Target to Date", actual: "Actual MTD", achievement: "Achieve to Date", gap: "MTD Gap", short: "MTD" },
