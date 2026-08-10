@@ -104,9 +104,11 @@ export default function Home() {
   const brandViews = useMemo(() => data.brands.map((brand) => {
     const row: DataRow = selectedShop === "ALL" ? brand : (data.shops.find((shop) => shop.brand === brand.brand && shop.code === selectedShop) ?? emptyRow());
     const values = metric === "net" ? row.dailyNet : row.dailyQty;
+    const previousValues = metric === "net" ? (row.previousDailyNet ?? []) : (row.previousDailyQty ?? []);
     const rowTarget = ((metric === "net" ? row.targetNet : row.targetQty) / 31) * (period === "mtd" ? selectedDay : 1);
     const rowActual = period === "mtd" ? sumTo(values, selectedDay) : values[selectedDay - 1] || 0;
-    return { ...brand, viewTarget: rowTarget, viewActual: rowActual, viewAchievement: rowTarget ? (rowActual / rowTarget) * 100 : 0 };
+    const rowPrevious = period === "mtd" ? sumTo(previousValues, selectedDay) : previousValues[selectedDay - 1] || 0;
+    return { ...brand, viewTarget: rowTarget, viewActual: rowActual, viewPrevious: rowPrevious, viewAchievement: rowTarget ? (rowActual / rowTarget) * 100 : 0 };
   }).filter((row) => row.viewTarget > 0), [metric, period, selectedDay, selectedShop]);
 
   const shopViews = useMemo(() => {
@@ -176,12 +178,12 @@ export default function Home() {
       </section>
 
       <section className="section shell">
-        <div className="section-heading"><div><span className="section-number">01</span><h2>Performance by Brand</h2><p>{metricLabel} • {period === "mtd" ? "MTD" : "Daily"} • {shopName}</p></div><div className="legend"><i className="target" /> Target <i className="actual" /> Actual</div></div>
+        <div className="section-heading"><div><span className="section-number">01</span><h2>Performance by Brand</h2><p>{metricLabel} • {period === "mtd" ? "MTD" : "Daily"} • {shopName} • MoM vs Jul</p></div><div className="legend"><i className="target" /> Target <i className="actual" /> Actual</div></div>
         <div className="brand-grid">
           {brandViews.map((item) => {
             const color = brandColors[item.brand] ?? "#64748b";
             return <button key={item.brand} className={`brand-card ${selectedBrand === item.brand ? "active" : ""}`} onClick={() => chooseBrand(item.brand)} style={{ "--brand": color } as React.CSSProperties}>
-              <div className="brand-card-top"><span className="brand-mark">{item.brand.slice(0, 2)}</span><strong>{item.brand}</strong><em className={tone(item.viewAchievement)}>{item.viewAchievement.toFixed(1)}%</em></div>
+              <div className="brand-card-top"><span className="brand-mark">{item.brand.slice(0, 2)}</span><strong>{item.brand}</strong><div className="brand-rates"><em className={tone(item.viewAchievement)}>{item.viewAchievement.toFixed(1)}%</em><span className={`brand-mom ${momTone(item.viewActual, item.viewPrevious)}`}>MoM {momLabel(item.viewActual, item.viewPrevious)}</span></div></div>
               <div className="brand-numbers"><span>Target <b>{displayValue(item.viewTarget)}</b></span><span>Actual <b>{displayValue(item.viewActual)}</b></span></div>
               <div className="progress-track"><span style={{ width: `${Math.min(item.viewAchievement, 100)}%` }} /></div>
             </button>;
