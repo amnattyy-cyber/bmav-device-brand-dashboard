@@ -95,7 +95,8 @@ export default function Home() {
   }, [refreshData]);
 
   useEffect(() => {
-    setSelectedDay((current) => current === previousLatestDay.current ? latestDay : Math.min(current, latestDay));
+    const priorLatestDay = previousLatestDay.current;
+    setSelectedDay((current) => current === priorLatestDay ? latestDay : Math.min(current, latestDay));
     previousLatestDay.current = latestDay;
   }, [latestDay]);
 
