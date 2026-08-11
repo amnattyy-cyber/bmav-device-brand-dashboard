@@ -31,43 +31,27 @@ const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 export const sheetRefreshInterval = REFRESH_INTERVAL_MS;
 
-function sheetCsvUrl(sheetName: string) {
-  const query = new URLSearchParams({ tqx: "out:csv", sheet: sheetName, _: String(Date.now()) });
-  return `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?${query}`;
-}
+type GvizCell = { v?: string | number | null; f?: string | null } | null;
+type GvizResponse = {
+  status: string;
+  errors?: Array<{ message?: string; detailed_message?: string }>;
+  table?: {
+    cols: Array<{ label?: string }>;
+    rows: Array<{ c: GvizCell[] }>;
+  };
+};
 
-export function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let value = "";
-  let quoted = false;
-
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    if (char === '"') {
-      if (quoted && text[index + 1] === '"') {
-        value += '"';
-        index += 1;
-      } else {
-        quoted = !quoted;
-      }
-    } else if (char === "," && !quoted) {
-      row.push(value);
-      value = "";
-    } else if ((char === "\n" || char === "\r") && !quoted) {
-      if (char === "\r" && text[index + 1] === "\n") index += 1;
-      row.push(value);
-      if (row.some((cell) => cell.trim() !== "")) rows.push(row);
-      row = [];
-      value = "";
-    } else {
-      value += char;
-    }
+export function gvizToRows(response: GvizResponse): string[][] {
+  if (response.status !== "ok" || !response.table) {
+    const detail = response.errors?.[0]?.detailed_message || response.errors?.[0]?.message || "Unknown Google Sheet error";
+    throw new Error(detail);
   }
-
-  row.push(value);
-  if (row.some((cell) => cell.trim() !== "")) rows.push(row);
-  return rows;
+  const headers = response.table.cols.map((column) => column.label ?? "");
+  const rows = response.table.rows.map((row) => headers.map((_, index) => {
+    const cell = row.c[index];
+    return String(cell?.f ?? cell?.v ?? "");
+  }));
+  return [headers, ...rows];
 }
 
 function numeric(value: string | undefined) {
@@ -117,16 +101,48 @@ function combineRows(rows: DataRow[], days: number): DataRow {
   }), emptyRow(days));
 }
 
-async function fetchCsv(sheetName: string) {
-  const response = await fetch(sheetCsvUrl(sheetName), { cache: "no-store" });
-  if (!response.ok) throw new Error(`Google Sheet ${sheetName} returned ${response.status}`);
-  const text = await response.text();
-  if (/^\s*</.test(text) || !text.trim()) throw new Error(`Google Sheet ${sheetName} is not published as CSV`);
-  return parseCsv(text);
+async function fetchSheet(sheetName: string): Promise<string[][]> {
+  const callbackName = `bmavSheet_${sheetName}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const query = new URLSearchParams({
+    tqx: `out:json;responseHandler:${callbackName}`,
+    sheet: sheetName,
+    _: String(Date.now()),
+  });
+  const callbackHost = window as unknown as Record<string, ((response: GvizResponse) => void) | undefined>;
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      delete callbackHost[callbackName];
+      script.remove();
+    };
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error(`Google Sheet ${sheetName} timed out`));
+    }, 20_000);
+
+    callbackHost[callbackName] = (response) => {
+      try {
+        resolve(gvizToRows(response));
+      } catch (error) {
+        reject(error);
+      } finally {
+        cleanup();
+      }
+    };
+    script.onerror = () => {
+      cleanup();
+      reject(new Error(`Google Sheet ${sheetName} could not be loaded`));
+    };
+    script.src = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?${query}`;
+    script.async = true;
+    document.head.appendChild(script);
+  });
 }
 
 export async function loadGoogleSheetData(): Promise<DashboardData> {
-  const [salesTable, targetTable] = await Promise.all([fetchCsv("Daily_Sales"), fetchCsv("Target_Brand")]);
+  const [salesTable, targetTable] = await Promise.all([fetchSheet("Daily_Sales"), fetchSheet("Target_Brand")]);
   if (salesTable.length < 2 || targetTable.length < 2) throw new Error("Google Sheet has no data rows");
 
   const salesHeader = salesTable[0];
