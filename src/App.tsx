@@ -65,9 +65,8 @@ export default function Home() {
   const [metric, setMetric] = useState<Metric>("net");
   const [viewMode, setViewMode] = useState<ViewMode>("mtd");
   const [selectedBrand, setSelectedBrand] = useState("ALL");
-  const [selectedShop, setSelectedShop] = useState("ALL");
+  const [selectedShops, setSelectedShops] = useState<string[]>([]);
   const [selectedDay, setSelectedDay] = useState(Number(fallbackData.latest.slice(-2)));
-  const [showAllShops, setShowAllShops] = useState(false);
   const previousLatestDay = useRef(Number(fallbackData.latest.slice(-2)));
   const latestDay = Number(data.latest.slice(-2));
   const monthPrefix = data.latest.slice(0, 7);
@@ -107,18 +106,17 @@ export default function Home() {
 
   const chooseBrand = (brand: string) => {
     setSelectedBrand(brand);
-    setShowAllShops(false);
-    if (selectedShop !== "ALL" && !data.shops.some((row) => row.brand === brand && row.code === selectedShop)) setSelectedShop("ALL");
+    setSelectedShops((current) => current.filter((code) => data.shops.some((row) => row.code === code && (brand === "ALL" || row.brand === brand))));
+  };
+
+  const toggleShop = (code: string) => {
+    setSelectedShops((current) => current.includes(code) ? current.filter((item) => item !== code) : [...current, code]);
   };
 
   const scopeRow = useMemo<DataRow>(() => {
-    if (selectedShop !== "ALL") {
-      const rows = data.shops.filter((row) => row.code === selectedShop && (selectedBrand === "ALL" || row.brand === selectedBrand));
-      return combineRows(rows);
-    }
-    if (selectedBrand !== "ALL") return data.brands.find((row) => row.brand === selectedBrand) ?? emptyRow();
-    return data.totals;
-  }, [data.brands, data.shops, data.totals, selectedBrand, selectedShop]);
+    const rows = data.shops.filter((row) => (selectedBrand === "ALL" || row.brand === selectedBrand) && (selectedShops.length === 0 || selectedShops.includes(row.code)));
+    return combineRows(rows);
+  }, [data.shops, selectedBrand, selectedShops]);
 
   const dailyValues = metric === "net" ? scopeRow.dailyNet : scopeRow.dailyQty;
   const getViewMetrics = useCallback((row: DataRow): ViewMetrics => {
@@ -153,6 +151,7 @@ export default function Home() {
   const metricLabel = metric === "net" ? "Net Amount" : "Quantity";
   const unit = metric === "net" ? "บาท" : "เครื่อง";
   const displayValue = (value: number) => metric === "net" ? `฿${integer.format(value)}` : number.format(value);
+  const tableValue = (value: number) => metric === "net" ? integer.format(value) : number.format(value);
   const modeCopy = {
     day: { title: "Daily", target: "Target Daily", actual: "Actual Daily", achievement: "Daily Achievement", gap: "Daily Gap", short: "DAILY" },
     mtd: { title: "MTD", target: "Target to Date", actual: "Actual MTD", achievement: "Achieve to Date", gap: "MTD Gap", short: "MTD" },
@@ -161,10 +160,11 @@ export default function Home() {
   }[viewMode];
 
   const brandViews = useMemo(() => data.brands.map((brand) => {
-    const row: DataRow = selectedShop === "ALL" ? brand : (data.shops.find((shop) => shop.brand === brand.brand && shop.code === selectedShop) ?? emptyRow());
+    const rows = data.shops.filter((shop) => shop.brand === brand.brand && (selectedShops.length === 0 || selectedShops.includes(shop.code)));
+    const row: DataRow = combineRows(rows);
     const view = getViewMetrics(row);
     return { ...brand, viewTarget: view.target, viewActual: view.actual, viewPrevious: view.previous, viewAchievement: view.achievement };
-  }).filter((row) => row.viewTarget > 0), [data.brands, data.shops, getViewMetrics, selectedShop]);
+  }).filter((row) => row.viewTarget > 0), [data.brands, data.shops, getViewMetrics, selectedShops]);
 
   const shopViews = useMemo(() => {
     const rows: DataRow[] = selectedBrand === "ALL"
@@ -174,14 +174,14 @@ export default function Home() {
         })
       : data.shops.filter((row) => row.brand === selectedBrand);
     return rows
-      .filter((row) => selectedShop === "ALL" || row.code === selectedShop)
+      .filter((row) => selectedShops.length === 0 || selectedShops.includes(String(row.code)))
       .map((row) => {
         const view = getViewMetrics(row);
         return { ...row, viewTarget: view.target, viewActual: view.actual, viewPrevious: view.previous, viewAchievement: view.achievement };
       })
       .filter((row) => row.viewTarget > 0)
       .sort((a, b) => viewMode === "mtd" || viewMode === "day" ? b.viewActual - a.viewActual : b.viewAchievement - a.viewAchievement);
-  }, [data.shops, getViewMetrics, selectedBrand, selectedShop, viewMode]);
+  }, [data.shops, getViewMetrics, selectedBrand, selectedShops, viewMode]);
 
   const trend = useMemo(() => Array.from({ length: selectedDay }, (_, index) => ({
     day: index + 1,
@@ -190,10 +190,9 @@ export default function Home() {
   const trendMax = Math.max(...trend.map((item) => item.actual), 1);
   const trendTotal = sumTo(dailyValues, selectedDay);
   const selectedColor = selectedBrand === "ALL" ? "#7c3aed" : brandColors[selectedBrand] ?? "#7c3aed";
-  const displayedShops = showAllShops ? shopViews : shopViews.slice(0, 10);
-  const shopName = selectedShop === "ALL" ? "ทุกสาขา" : shopOptions.find(([code]) => code === selectedShop)?.[1] ?? selectedShop;
+  const selectedShopNames = shopOptions.filter(([code]) => selectedShops.includes(code)).map(([, shop]) => shop);
+  const shopName = selectedShops.length === 0 ? "ทุกสาขา" : selectedShops.length === 1 ? selectedShopNames[0] ?? "1 สาขาที่เลือก" : `${selectedShops.length} สาขาที่เลือก`;
   const previousColumnLabel = viewMode === "runrate" ? "Run Rate Jul" : viewMode === "day" ? "Actual Jul" : "Actual Jul MTD";
-  const previousPeriodLabel = viewMode === "runrate" ? "ประมาณการ Jul" : viewMode === "day" ? `${selectedDay} Jul` : `1–${selectedDay} Jul`;
   const scoreRingLabel = viewMode === "runrate" ? "PROJECTED ACHIEVE" : viewMode === "achieve" ? "ACHIEVE TO DATE" : `${modeCopy.short} ACHIEVEMENT`;
 
   return (
@@ -217,7 +216,7 @@ export default function Home() {
       <section className="filter-dock shell" aria-label="ตัวกรอง Dashboard">
         <div className="filter-group metric-filter"><span className="filter-label">มุมมองหลัก</span><div className="segmented"><button className={metric === "net" ? "selected" : ""} onClick={() => setMetric("net")}>Net Amount</button><button className={metric === "qty" ? "selected" : ""} onClick={() => setMetric("qty")}>Qty</button></div></div>
         <div className="filter-group"><label htmlFor="brand-filter">Brand</label><select id="brand-filter" value={selectedBrand} onChange={(event) => chooseBrand(event.target.value)}><option value="ALL">ALL BRANDS</option>{data.brands.map((row) => <option key={row.brand} value={row.brand}>{row.brand}</option>)}</select></div>
-        <div className="filter-group shop-filter"><label htmlFor="shop-filter">สาขา</label><select id="shop-filter" value={selectedShop} onChange={(event) => { setSelectedShop(event.target.value); setShowAllShops(false); }}><option value="ALL">ทุกสาขาที่มี Target</option>{shopOptions.map(([code, shop]) => <option key={code} value={code}>{shop}</option>)}</select></div>
+        <div className="filter-group shop-filter"><span className="filter-label">สาขา</span><details className="shop-multiselect"><summary><span>{selectedShops.length === 0 ? "ทุกสาขาที่มี Target" : `${selectedShops.length} สาขาที่เลือก`}</span><b aria-hidden="true">⌄</b></summary><div className="shop-menu"><label className="shop-option all-shops"><input type="checkbox" checked={selectedShops.length === 0} onChange={() => setSelectedShops([])} /><span>ทุกสาขาที่มี Target</span></label><div className="shop-option-list">{shopOptions.map(([code, shop]) => <label className="shop-option" key={code}><input type="checkbox" checked={selectedShops.includes(code)} onChange={() => toggleShop(code)} /><span>{shop}</span></label>)}</div></div></details></div>
         <div className="filter-group performance-filter"><span className="filter-label">Performance</span><div className="segmented performance-segmented"><button className={viewMode === "mtd" ? "selected" : ""} onClick={() => setViewMode("mtd")}>MTD</button><button className={viewMode === "achieve" ? "selected" : ""} onClick={() => setViewMode("achieve")}>Achieve TD</button><button className={viewMode === "runrate" ? "selected" : ""} onClick={() => setViewMode("runrate")}>Run Rate</button><button className={viewMode === "day" ? "selected" : ""} onClick={() => setViewMode("day")}>Daily</button></div></div>
         <div className="filter-group"><label htmlFor="date-filter">วันที่ขาย</label><input id="date-filter" type="date" min={`${monthPrefix}-01`} max={data.latest} value={formatDate(selectedDay)} onChange={(event) => setSelectedDay(Number(event.target.value.slice(-2)))} /></div>
       </section>
@@ -257,12 +256,11 @@ export default function Home() {
         <aside className="focus-panel panel"><span className="section-number">PERFORMANCE FOCUS</span><h2>{metricLabel}</h2><p>{selectedBrand === "ALL" ? "ALL BRANDS" : selectedBrand} • {shopName}</p><div className="focus-meter"><span style={{ width: `${Math.min(achievement, 100)}%`, background: selectedColor }} /></div><div className="focus-stats"><span><small>{modeCopy.actual}</small><strong>{displayValue(actual)}</strong><small>{modeCopy.title}</small></span><span><small>{modeCopy.target}</small><strong>{displayValue(target)}</strong><small>{modeCopy.title}</small></span></div><div className="pace-note"><span>{modeCopy.short}</span><p>{viewMode === "runrate" ? `ประมาณการสิ้นเดือนจากยอดขายเฉลี่ย ${selectedDay} วัน` : `ข้อมูลถึงวันที่ ${thaiDate(selectedDay)}`} • เลือก Net Amount / Qty ได้ทันที</p></div></aside>
       </section>
 
-      <section className="section shell">
+      <section className="section shop-performance-section shell">
         <div className="section-heading shop-heading"><div><span className="section-number">03</span><h2>Shop Performance</h2><p>{selectedBrand === "ALL" ? "สาขาที่มี Target ใน BMAV" : `เฉพาะสาขาที่มี Target ${selectedBrand}`} • {modeCopy.title} • MoM เทียบ Jul</p></div><span className="shop-count">{shopViews.length} สาขา</span></div>
-        <div className="shop-table-wrap"><table><thead><tr><th>อันดับ</th><th>สาขา</th><th>{modeCopy.target}</th><th>{modeCopy.actual} Aug</th><th>{previousColumnLabel}</th><th>MoM</th><th>{modeCopy.achievement}</th><th>{modeCopy.gap}</th></tr></thead><tbody>
-          {displayedShops.map((shop, index) => <tr key={shop.code}><td><span className={`rank ${index < 3 ? "top" : ""}`}>{index + 1}</span></td><td><strong>{shop.shop}</strong><small>{shop.code}</small></td><td>{displayValue(shop.viewTarget)}</td><td><b>{displayValue(shop.viewActual)}</b></td><td>{displayValue(shop.viewPrevious)}</td><td><span className={`mom-value ${momTone(shop.viewActual, shop.viewPrevious)}`}>{momLabel(shop.viewActual, shop.viewPrevious)}</span><small>{previousPeriodLabel}</small></td><td><div className="achievement-cell"><div><span style={{ width: `${Math.min(shop.viewAchievement, 100)}%` }} /></div><em className={tone(shop.viewAchievement)}>{shop.viewAchievement.toFixed(1)}%</em></div></td><td className={shop.viewActual - shop.viewTarget >= 0 ? "positive-gap" : "gap"}>{displayValue(shop.viewActual - shop.viewTarget)}</td></tr>)}
+        <div className="shop-table-wrap"><table><thead><tr><th>อันดับ</th><th>สาขา</th><th>Target</th><th>Actual Aug</th><th>{previousColumnLabel}</th><th>MoM</th><th>Achievement</th><th>Gap</th></tr></thead><tbody>
+          {shopViews.map((shop, index) => <tr key={shop.code}><td><span className={`rank ${index < 3 ? "top" : ""}`}>{index + 1}</span></td><td className="shop-name"><strong>{shop.shop}</strong></td><td>{tableValue(shop.viewTarget)}</td><td><b>{tableValue(shop.viewActual)}</b></td><td>{tableValue(shop.viewPrevious)}</td><td><span className={`mom-value ${momTone(shop.viewActual, shop.viewPrevious)}`}>{momLabel(shop.viewActual, shop.viewPrevious)}</span></td><td><div className="achievement-cell"><div><span style={{ width: `${Math.min(shop.viewAchievement, 100)}%` }} /></div><em className={tone(shop.viewAchievement)}>{shop.viewAchievement.toFixed(1)}%</em></div></td><td className={shop.viewActual - shop.viewTarget >= 0 ? "positive-gap" : "gap"}>{tableValue(shop.viewActual - shop.viewTarget)}</td></tr>)}
         </tbody></table></div>
-        {shopViews.length > 10 && <button className="show-more" onClick={() => setShowAllShops(!showAllShops)}>{showAllShops ? "แสดง 10 อันดับแรก" : `ดูครบทั้ง ${shopViews.length} สาขา`} <span>{showAllShops ? "↑" : "↓"}</span></button>}
       </section>
 
       <footer className="shell"><div><strong>BMAV</strong><span>Device by Brand Dashboard</span></div><p><span className={`source-badge ${sourceStatus}`}>{sourceStatus === "live" ? "LIVE · Google Sheet" : sourceStatus === "loading" ? "กำลังอัปเดต" : "ข้อมูลสำรอง"}</span> Last updated {thaiDate(latestDay)}{lastSync ? ` · Sync ${lastSync.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}` : ""}</p></footer>
