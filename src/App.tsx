@@ -6,6 +6,8 @@ import { fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DataRow }
 type Metric = "net" | "qty";
 type ViewMode = "day" | "mtd" | "achieve" | "runrate";
 type SourceStatus = "loading" | "live" | "fallback";
+type WeekRange = { start: number; end: number; label: string };
+type WeekSnapshot = { net: number; qty: number };
 type ViewMetrics = {
   monthlyTarget: number;
   mtdActual: number;
@@ -29,6 +31,17 @@ const compactChart = (value: number) => value >= 1_000_000
     ? `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1)}K`
     : integer.format(value);
 const sumTo = (values: number[], day: number) => values.slice(0, day).reduce((sum, value) => sum + value, 0);
+const weekRanges: WeekRange[] = [
+  { start: 1, end: 7, label: "1–7 Aug" },
+  { start: 8, end: 14, label: "8–14 Aug" },
+  { start: 15, end: 21, label: "15–21 Aug" },
+  { start: 22, end: 28, label: "22–28 Aug" },
+  { start: 29, end: 31, label: "29–31 Aug" },
+];
+const weekIndexForDay = (day: number) => Math.max(0, weekRanges.findIndex((range) => day >= range.start && day <= range.end));
+const rangeSum = (values: number[] | undefined, start: number, end: number) => (values ?? []).slice(start - 1, end).reduce((sum, value) => sum + value, 0);
+const changeRate = (current: number, previous: number) => previous ? ((current - previous) / previous) * 100 : current ? 100 : 0;
+const signed = (value: number, digits = 1) => `${value > 0 ? "+" : ""}${value.toFixed(digits)}%`;
 
 const emptyRow = (): DataRow => ({ targetQty: 0, targetNet: 0, dailyQty: Array(31).fill(0), dailyNet: Array(31).fill(0), previousDailyQty: Array(31).fill(0), previousDailyNet: Array(31).fill(0) });
 const combineRows = (rows: DataRow[]): DataRow => rows.reduce((total, row) => ({
@@ -67,6 +80,7 @@ export default function Home() {
   const [selectedBrand, setSelectedBrand] = useState("ALL");
   const [selectedShops, setSelectedShops] = useState<string[]>([]);
   const [selectedDay, setSelectedDay] = useState(Number(fallbackData.latest.slice(-2)));
+  const [selectedWeek, setSelectedWeek] = useState(weekIndexForDay(Number(fallbackData.latest.slice(-2))));
   const previousLatestDay = useRef(Number(fallbackData.latest.slice(-2)));
   const latestDay = Number(data.latest.slice(-2));
   const monthPrefix = data.latest.slice(0, 7);
@@ -97,6 +111,7 @@ export default function Home() {
   useEffect(() => {
     const priorLatestDay = previousLatestDay.current;
     setSelectedDay((current) => current === priorLatestDay ? latestDay : Math.min(current, latestDay));
+    setSelectedWeek((current) => current === weekIndexForDay(priorLatestDay) ? weekIndexForDay(latestDay) : current);
     previousLatestDay.current = latestDay;
   }, [latestDay]);
 
@@ -196,6 +211,58 @@ export default function Home() {
   const previousColumnLabel = viewMode === "runrate" ? "Run Rate Jul" : viewMode === "day" ? "Actual Jul" : "Actual Jul MTD";
   const scoreRingLabel = viewMode === "runrate" ? "PROJECTED ACHIEVE" : viewMode === "achieve" ? "ACHIEVE TO DATE" : `${modeCopy.short} ACHIEVEMENT`;
 
+  const wow = useMemo(() => {
+    const range = weekRanges[selectedWeek];
+    const currentEnd = Math.min(range.end, latestDay);
+    const currentDays = Math.max(0, currentEnd - range.start + 1);
+    const snapshot = (row: DataRow, previous = false): WeekSnapshot => {
+      if (!currentDays) return { net: 0, qty: 0 };
+      if (previous && selectedWeek === 0) {
+        const previousMonthEnd = previousMonthDays;
+        return {
+          net: rangeSum(row.previousDailyNet, previousMonthEnd - currentDays + 1, previousMonthEnd),
+          qty: rangeSum(row.previousDailyQty, previousMonthEnd - currentDays + 1, previousMonthEnd),
+        };
+      }
+      const start = previous ? weekRanges[selectedWeek - 1].start : range.start;
+      return {
+        net: rangeSum(row.dailyNet, start, start + currentDays - 1),
+        qty: rangeSum(row.dailyQty, start, start + currentDays - 1),
+      };
+    };
+    const rows = data.shops.filter((row) => (selectedBrand === "ALL" || row.brand === selectedBrand) && (selectedShops.length === 0 || selectedShops.includes(row.code)));
+    const current = snapshot(combineRows(rows));
+    const previous = snapshot(combineRows(rows), true);
+    const overallCurrentNet = snapshot(combineRows(data.shops)).net;
+    const overallPreviousNet = snapshot(combineRows(data.shops), true).net;
+    const decorate = (name: string, row: DataRow) => {
+      const now = snapshot(row);
+      const before = snapshot(row, true);
+      const currentShare = overallCurrentNet ? (now.net / overallCurrentNet) * 100 : 0;
+      const previousShare = overallPreviousNet ? (before.net / overallPreviousNet) * 100 : 0;
+      return { name, current: now, previous: before, deltaNet: now.net - before.net, deltaQty: now.qty - before.qty, currentShare, shareDelta: currentShare - previousShare };
+    };
+    const brandDrivers = [...new Set(rows.map((row) => row.brand))].map((brand) => decorate(brand, combineRows(rows.filter((row) => row.brand === brand)))).sort((a, b) => b.deltaNet - a.deltaNet);
+    const shopDrivers = [...new Set(rows.map((row) => row.code))].map((code) => {
+      const items = rows.filter((row) => row.code === code);
+      return decorate(items[0]?.shop ?? code, combineRows(items));
+    }).sort((a, b) => b.deltaNet - a.deltaNet);
+    const netRate = changeRate(current.net, previous.net);
+    const qtyRate = changeRate(current.qty, previous.qty);
+    const currentAsp = current.qty ? current.net / current.qty : 0;
+    const previousAsp = previous.qty ? previous.net / previous.qty : 0;
+    const aspRate = changeRate(currentAsp, previousAsp);
+    const leadBrand = netRate >= 0 ? brandDrivers[0] : brandDrivers.at(-1);
+    const leadShop = netRate >= 0 ? shopDrivers[0] : shopDrivers.at(-1);
+    const direction = netRate >= 0 ? "เติบโต" : "ชะลอ";
+    const cause = Math.abs(qtyRate) >= Math.abs(aspRate) ? `QTY ${signed(qtyRate)} เป็นสัญญาณหลัก` : `มูลค่าต่อเครื่อง ${signed(aspRate)} เป็นสัญญาณหลัก`;
+    const action = netRate < 0
+      ? `เร่งกู้ยอดที่ ${leadShop?.name ?? "สาขาที่ติดลบ"} โดยโฟกัส ${leadBrand?.name ?? "Brand ที่ลดลง"}; ${qtyRate < 0 ? "เพิ่ม conversion และ stock รุ่นขายดี" : "ดัน mix รุ่นมูลค่าสูงและ attach offer"}`
+      : `รักษาแรงส่ง ${leadBrand?.name ?? "Brand นำ"} ที่ ${leadShop?.name ?? "สาขานำ"} และถอด playbook ไปยังสาขาที่ contribution ลดลง`;
+    const previousLabel = selectedWeek === 0 ? `${previousMonthDays - currentDays + 1}–${previousMonthDays} Jul` : `${weekRanges[selectedWeek - 1].start}–${weekRanges[selectedWeek - 1].start + currentDays - 1} Aug`;
+    return { range, currentEnd, currentDays, current, previous, netRate, qtyRate, currentAsp, previousAsp, aspRate, brandDrivers, shopDrivers, leadBrand, leadShop, direction, cause, action, previousLabel };
+  }, [data.shops, latestDay, previousMonthDays, selectedBrand, selectedShops, selectedWeek]);
+
   return (
     <main>
       <section className="hero shell">
@@ -223,6 +290,25 @@ export default function Home() {
       </section>
 
       <section className="context-line shell"><span>{metricLabel}</span><b>{selectedBrand === "ALL" ? "ALL BRANDS" : selectedBrand}</b><b>{shopName}</b><b>{modeCopy.title} ณ {thaiDate(selectedDay)}</b></section>
+
+      <section className="section wow-section shell" aria-labelledby="wow-title">
+        <div className="section-heading wow-heading"><div><span className="section-number">WOW</span><h2 id="wow-title">Week on Week by Brand</h2><p>เทียบช่วงวันเท่ากัน • Net Amount, QTY, drivers และสัญญาณเชิงพาณิชย์</p></div><span className={`wow-status ${wow.netRate >= 0 ? "up" : "down"}`}>{wow.direction} {signed(wow.netRate)}</span></div>
+        <div className="week-picker" role="group" aria-label="เลือกช่วง Week on Week">
+          {weekRanges.map((range, index) => <button key={range.label} className={selectedWeek === index ? "selected" : ""} onClick={() => setSelectedWeek(index)} disabled={range.start > latestDay}><span>{range.label}</span><small>{range.start > latestDay ? "ยังไม่มีข้อมูล" : index === weekIndexForDay(latestDay) && latestDay < range.end ? `ถึง ${latestDay} Aug` : "พร้อมวิเคราะห์"}</small></button>)}
+        </div>
+        <div className="wow-context"><b>{wow.range.label}{wow.currentEnd < wow.range.end ? ` (ข้อมูลถึง ${wow.currentEnd} Aug)` : ""}</b><span>เทียบ {wow.previousLabel}</span><span>{selectedBrand === "ALL" ? "ทุก Brand" : selectedBrand} • {shopName}</span></div>
+        <div className="wow-kpis">
+          <article><span>Net Amount</span><strong>฿{integer.format(wow.current.net)}</strong><small>สัปดาห์ก่อน ฿{integer.format(wow.previous.net)}</small><em className={wow.current.net >= wow.previous.net ? "positive" : "negative"}>{wow.current.net - wow.previous.net >= 0 ? "+" : ""}฿{integer.format(wow.current.net - wow.previous.net)} • {signed(wow.netRate)}</em></article>
+          <article><span>QTY</span><strong>{integer.format(wow.current.qty)} เครื่อง</strong><small>สัปดาห์ก่อน {integer.format(wow.previous.qty)} เครื่อง</small><em className={wow.current.qty >= wow.previous.qty ? "positive" : "negative"}>{wow.current.qty - wow.previous.qty >= 0 ? "+" : ""}{integer.format(wow.current.qty - wow.previous.qty)} • {signed(wow.qtyRate)}</em></article>
+          <article><span>มูลค่าต่อเครื่อง</span><strong>฿{integer.format(wow.currentAsp)}</strong><small>สัปดาห์ก่อน ฿{integer.format(wow.previousAsp)}</small><em className={wow.currentAsp >= wow.previousAsp ? "positive" : "negative"}>{signed(wow.aspRate)} WoW</em></article>
+          <article><span>Shop contribution signal</span><strong>{wow.leadShop?.name ?? "—"}</strong><small>{wow.netRate >= 0 ? "สาขาผลักดันหลัก" : "สาขาตัวฉุดหลัก"}</small><em className={(wow.leadShop?.shareDelta ?? 0) >= 0 ? "positive" : "negative"}>{signed(wow.leadShop?.shareDelta ?? 0)} pts share</em></article>
+        </div>
+        <div className="wow-analysis-grid">
+          <article className="driver-panel"><header><div><span>BRAND DRIVER</span><h3>ตัวผลักดัน / ตัวฉุด</h3></div><small>Δ Net Amount</small></header><div className="driver-list">{[...wow.brandDrivers.slice(0, 2), ...wow.brandDrivers.slice(-2).reverse().filter((driver) => !wow.brandDrivers.slice(0, 2).includes(driver))].map((driver) => <div key={driver.name}><b>{driver.name}</b><span className={driver.deltaNet >= 0 ? "positive" : "negative"}>{driver.deltaNet >= 0 ? "+" : ""}฿{compactChart(driver.deltaNet)}</span><small>QTY {driver.deltaQty >= 0 ? "+" : ""}{integer.format(driver.deltaQty)} • Share {signed(driver.shareDelta)} pts</small></div>)}</div></article>
+          <article className="driver-panel"><header><div><span>SHOP DRIVER</span><h3>สาขาที่ต้องจับตา</h3></div><small>Δ Net Amount</small></header><div className="driver-list">{wow.shopDrivers.slice(0, 2).map((driver) => <div key={driver.name}><b>{driver.name}</b><span className={driver.deltaNet >= 0 ? "positive" : "negative"}>{driver.deltaNet >= 0 ? "+" : ""}฿{compactChart(driver.deltaNet)}</span><small>QTY {driver.deltaQty >= 0 ? "+" : ""}{integer.format(driver.deltaQty)} • Share {signed(driver.shareDelta)} pts</small></div>)}{wow.shopDrivers.slice(-2).reverse().filter((driver) => !wow.shopDrivers.slice(0, 2).includes(driver)).map((driver) => <div key={driver.name}><b>{driver.name}</b><span className={driver.deltaNet >= 0 ? "positive" : "negative"}>{driver.deltaNet >= 0 ? "+" : ""}฿{compactChart(driver.deltaNet)}</span><small>QTY {driver.deltaQty >= 0 ? "+" : ""}{integer.format(driver.deltaQty)} • Share {signed(driver.shareDelta)} pts</small></div>)}</div></article>
+          <aside className="action-panel"><span>INSIGHT → ACTION</span><h3>สัปดาห์นี้ยอด{wow.direction}</h3><p><b>สัญญาณ:</b> {wow.cause} ขณะที่ Shop contribution ของ {wow.leadShop?.name ?? "สาขาหลัก"} เปลี่ยน {signed(wow.leadShop?.shareDelta ?? 0)} pts</p><div><small>ACTION ชี้เป้า</small><strong>{wow.action}</strong></div></aside>
+        </div>
+      </section>
 
       <section className="kpi-grid shell">
         <article className="kpi-card purple"><div className="kpi-icon">T</div><span>{modeCopy.target} {metricLabel}</span><strong>{displayValue(target)}</strong><small>{viewMode === "day" ? "เป้าหมายเฉลี่ยต่อวัน" : viewMode === "runrate" ? "เป้าหมายเต็มเดือน" : `เป้าหมายสะสม ${selectedDay} วัน`}</small></article>
