@@ -11,6 +11,7 @@ Public interactive dashboard for BMA V - Central device performance in August 20
 - KPI, brand performance, shop ranking, and daily trend updates from the same filters
 - Week-on-week analysis across the fixed August periods (1–7, 8–14, 15–21, 22–28, and 29–31), defaulting to the period that contains the latest live date
 - Net Amount and QTY deltas, WoW percentages, brand/shop drivers, average selling value, shop contribution signals, and a targeted action summary
+- Per-brand WoW badges alongside the existing MoM badges, responsive to the selected week, metric, and shop filter
 - Google Sheet JSONP live status with an automatic refresh every five minutes
 
 ## Week-on-week comparison

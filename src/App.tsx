@@ -263,6 +263,34 @@ export default function Home() {
     return { range, currentEnd, currentDays, current, previous, netRate, qtyRate, currentAsp, previousAsp, aspRate, brandDrivers, shopDrivers, leadBrand, leadShop, direction, cause, action, previousLabel };
   }, [data.shops, latestDay, previousMonthDays, selectedBrand, selectedShops, selectedWeek]);
 
+  const brandWow = useMemo(() => {
+    const range = weekRanges[selectedWeek];
+    const currentEnd = Math.min(range.end, latestDay);
+    const currentDays = Math.max(0, currentEnd - range.start + 1);
+    const snapshot = (row: DataRow, previous = false): WeekSnapshot => {
+      if (!currentDays) return { net: 0, qty: 0 };
+      if (previous && selectedWeek === 0) {
+        return {
+          net: rangeSum(row.previousDailyNet, previousMonthDays - currentDays + 1, previousMonthDays),
+          qty: rangeSum(row.previousDailyQty, previousMonthDays - currentDays + 1, previousMonthDays),
+        };
+      }
+      const start = previous ? weekRanges[selectedWeek - 1].start : range.start;
+      return {
+        net: rangeSum(row.dailyNet, start, start + currentDays - 1),
+        qty: rangeSum(row.dailyQty, start, start + currentDays - 1),
+      };
+    };
+
+    return new Map(data.brands.map(({ brand }) => {
+      const rows = data.shops.filter((shop) => shop.brand === brand && (selectedShops.length === 0 || selectedShops.includes(shop.code)));
+      const row = combineRows(rows);
+      const current = snapshot(row)[metric];
+      const previous = snapshot(row, true)[metric];
+      return [brand, { current, previous, rate: previous > 0 ? changeRate(current, previous) : null }] as const;
+    }));
+  }, [data.brands, data.shops, latestDay, metric, previousMonthDays, selectedShops, selectedWeek]);
+
   return (
     <main>
       <section className="hero shell">
@@ -318,12 +346,15 @@ export default function Home() {
       </section>
 
       <section className="section shell">
-        <div className="section-heading"><div><span className="section-number">01</span><h2>Performance by Brand</h2><p>{metricLabel} • {modeCopy.title} • {shopName} • MoM vs Jul</p></div><div className="legend"><i className="target" /> {modeCopy.target} <i className="actual" /> {modeCopy.actual}</div></div>
+        <div className="section-heading"><div><span className="section-number">01</span><h2>Performance by Brand</h2><p>{metricLabel} • {modeCopy.title} • {shopName} • MoM vs Jul<br /><span className="brand-wow-context">WoW {wow.range.label}{wow.currentEnd < wow.range.end ? ` (ข้อมูลถึง ${wow.currentEnd} Aug)` : ""} เทียบ {wow.previousLabel} • จำนวนวันเท่ากัน</span></p></div><div className="legend"><i className="target" /> {modeCopy.target} <i className="actual" /> {modeCopy.actual}</div></div>
         <div className="brand-grid">
           {brandViews.map((item) => {
             const color = brandColors[item.brand] ?? "#64748b";
+            const weekly = brandWow.get(item.brand);
+            const wowLabel = weekly?.rate == null ? "—" : signed(weekly.rate);
+            const wowClass = weekly?.rate == null ? "mom-neutral" : weekly.rate >= 0 ? "mom-up" : "mom-down";
             return <button key={item.brand} className={`brand-card ${selectedBrand === item.brand ? "active" : ""}`} onClick={() => chooseBrand(item.brand)} style={{ "--brand": color } as React.CSSProperties}>
-              <div className="brand-card-top"><span className="brand-mark">{item.brand.slice(0, 2)}</span><strong>{item.brand}</strong><div className="brand-rates"><em className={tone(item.viewAchievement)}>{viewMode === "mtd" || viewMode === "day" ? displayValue(item.viewActual) : `${item.viewAchievement.toFixed(1)}%`}</em><span className="brand-view-label">{modeCopy.short}</span><span className={`brand-mom ${momTone(item.viewActual, item.viewPrevious)}`}>MoM {momLabel(item.viewActual, item.viewPrevious)}</span></div></div>
+              <div className="brand-card-top"><span className="brand-mark">{item.brand.slice(0, 2)}</span><strong>{item.brand}</strong><div className="brand-rates"><em className={tone(item.viewAchievement)}>{viewMode === "mtd" || viewMode === "day" ? displayValue(item.viewActual) : `${item.viewAchievement.toFixed(1)}%`}</em><span className="brand-view-label">{modeCopy.short}</span><div className="brand-change-badges"><span className={`brand-mom ${momTone(item.viewActual, item.viewPrevious)}`}>MoM {momLabel(item.viewActual, item.viewPrevious)}</span><span className={`brand-mom ${wowClass}`}>WoW {metric === "net" ? "Net" : "Qty"} {wowLabel}</span></div></div></div>
               <div className="brand-numbers"><span>{modeCopy.target} <b>{displayValue(item.viewTarget)}</b></span><span>{modeCopy.actual} <b>{displayValue(item.viewActual)}</b></span></div>
               <div className="progress-track"><span style={{ width: `${Math.min(item.viewAchievement, 100)}%` }} /></div>
             </button>;
