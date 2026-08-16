@@ -208,7 +208,6 @@ export default function Home() {
   const selectedColor = selectedBrand === "ALL" ? "#7c3aed" : brandColors[selectedBrand] ?? "#7c3aed";
   const selectedShopNames = shopOptions.filter(([code]) => selectedShops.includes(code)).map(([, shop]) => shop);
   const shopName = selectedShops.length === 0 ? "ทุกสาขา" : selectedShops.length === 1 ? selectedShopNames[0] ?? "1 สาขาที่เลือก" : `${selectedShops.length} สาขาที่เลือก`;
-  const previousColumnLabel = viewMode === "runrate" ? "Run Rate Jul" : viewMode === "day" ? "Actual Jul" : "Actual Jul MTD";
   const scoreRingLabel = viewMode === "runrate" ? "PROJECTED ACHIEVE" : viewMode === "achieve" ? "ACHIEVE TO DATE" : `${modeCopy.short} ACHIEVEMENT`;
 
   const wow = useMemo(() => {
@@ -290,6 +289,37 @@ export default function Home() {
       return [brand, { current, previous, rate: previous > 0 ? changeRate(current, previous) : null }] as const;
     }));
   }, [data.brands, data.shops, latestDay, metric, previousMonthDays, selectedShops, selectedWeek]);
+
+  const shopWow = useMemo(() => {
+    const range = weekRanges[selectedWeek];
+    const currentEnd = Math.min(range.end, latestDay);
+    const currentDays = Math.max(0, currentEnd - range.start + 1);
+    const valueFor = (row: DataRow, previous = false) => {
+      const values = metric === "net"
+        ? (previous && selectedWeek === 0 ? row.previousDailyNet : row.dailyNet)
+        : (previous && selectedWeek === 0 ? row.previousDailyQty : row.dailyQty);
+      if (!currentDays) return 0;
+      const start = previous
+        ? selectedWeek === 0 ? previousMonthDays - currentDays + 1 : weekRanges[selectedWeek - 1].start
+        : range.start;
+      return rangeSum(values, start, start + currentDays - 1);
+    };
+
+    return new Map(shopViews.map((shop) => {
+      const current = valueFor(shop);
+      const previous = valueFor(shop, true);
+      return [String(shop.code), { current, previous, rate: previous ? changeRate(current, previous) : null }] as const;
+    }));
+  }, [latestDay, metric, previousMonthDays, selectedWeek, shopViews]);
+
+  const brandWowChart = useMemo(() => {
+    const rows = data.brands.map(({ brand }) => {
+      const weekly = brandWow.get(brand);
+      return { brand, current: weekly?.current ?? 0, previous: weekly?.previous ?? 0, rate: weekly?.rate ?? null };
+    }).filter((item) => item.current > 0 || item.previous > 0);
+    const maxMagnitude = Math.max(...rows.map((item) => Math.abs(item.rate ?? 0)), 1);
+    return { rows: rows.sort((a, b) => (b.rate ?? 0) - (a.rate ?? 0)), maxMagnitude };
+  }, [brandWow, data.brands]);
 
   return (
     <main>
@@ -376,8 +406,31 @@ export default function Home() {
 
       <section className="section shop-performance-section shell">
         <div className="section-heading shop-heading"><div><span className="section-number">03</span><h2>Shop Performance</h2><p>{selectedBrand === "ALL" ? "สาขาที่มี Target ใน BMAV" : `เฉพาะสาขาที่มี Target ${selectedBrand}`} • {modeCopy.title} • MoM เทียบ Jul</p></div><span className="shop-count">{shopViews.length} สาขา</span></div>
-        <div className="shop-table-wrap"><table><thead><tr><th>อันดับ</th><th>สาขา</th><th>Target</th><th>Actual Aug</th><th>{previousColumnLabel}</th><th>MoM</th><th>Achievement</th><th>Gap</th></tr></thead><tbody>
-          {shopViews.map((shop, index) => <tr key={shop.code}><td><span className={`rank ${index < 3 ? "top" : ""}`}>{index + 1}</span></td><td className="shop-name"><strong>{shop.shop}</strong></td><td>{tableValue(shop.viewTarget)}</td><td><b>{tableValue(shop.viewActual)}</b></td><td>{tableValue(shop.viewPrevious)}</td><td><span className={`mom-value ${momTone(shop.viewActual, shop.viewPrevious)}`}>{momLabel(shop.viewActual, shop.viewPrevious)}</span></td><td><div className="achievement-cell"><div><span style={{ width: `${Math.min(shop.viewAchievement, 100)}%` }} /></div><em className={tone(shop.viewAchievement)}>{shop.viewAchievement.toFixed(1)}%</em></div></td><td className={shop.viewActual - shop.viewTarget >= 0 ? "positive-gap" : "gap"}>{tableValue(shop.viewActual - shop.viewTarget)}</td></tr>)}
+        <section className="wow-brand-chart" aria-labelledby="brand-wow-chart-title">
+          <header><div><span>WEEK COMPARISON</span><h3 id="brand-wow-chart-title">%WoW by Brand</h3></div><p>{metricLabel} • {wow.range.label} เทียบ {wow.previousLabel} • จำนวนวันเท่ากัน</p></header>
+          <div className="diverging-chart" role="img" aria-label={`กราฟเปอร์เซ็นต์ Week on Week แยกตาม Brand สำหรับ ${metricLabel}`}>
+            <div className="chart-side-labels"><span>ลดลง</span><b>0%</b><span>เติบโต</span></div>
+            {brandWowChart.rows.map((item) => {
+              const isNew = item.previous === 0 && item.current > 0;
+              const rate = item.rate ?? 0;
+              const width = isNew ? 100 : Math.max(rate === 0 ? 0 : 2, (Math.abs(rate) / brandWowChart.maxMagnitude) * 100);
+              return <div className={`diverging-row ${selectedBrand === item.brand ? "highlight" : ""}`} key={item.brand}>
+                <strong>{item.brand}</strong><div className="diverging-track"><i className="zero-line" />
+                  <span className={rate < 0 ? "bar-negative" : "bar-positive"} style={{ width: `${width / 2}%`, [rate < 0 ? "right" : "left"]: "50%" }} />
+                  <em className={rate < 0 ? "value-negative" : "value-positive"} style={{ [rate < 0 ? "right" : "left"]: `calc(50% + ${width / 2}% + 7px)` }}>{isNew ? "NEW" : signed(rate)}</em>
+                </div>
+              </div>;
+            })}
+          </div>
+        </section>
+        <div className="shop-table-wrap"><table><thead><tr><th>อันดับ</th><th>สาขา</th><th>Target</th><th>{modeCopy.actual}</th><th>MoM</th><th>%WoW</th><th>Achievement</th><th>Gap</th></tr></thead><tbody>
+          {shopViews.map((shop, index) => {
+            const weekly = shopWow.get(String(shop.code));
+            const isNew = weekly?.previous === 0 && (weekly?.current ?? 0) > 0;
+            const wowLabel = isNew ? "NEW" : weekly?.rate == null ? "—" : signed(weekly.rate);
+            const wowTone = isNew ? "mom-new" : weekly?.rate == null ? "mom-neutral" : weekly.rate >= 0 ? "mom-up" : "mom-down";
+            return <tr key={shop.code}><td><span className={`rank ${index < 3 ? "top" : ""}`}>{index + 1}</span></td><td className="shop-name"><strong>{shop.shop}</strong></td><td>{tableValue(shop.viewTarget)}</td><td><b>{tableValue(shop.viewActual)}</b></td><td><span className={`mom-value ${momTone(shop.viewActual, shop.viewPrevious)}`}>{momLabel(shop.viewActual, shop.viewPrevious)}</span></td><td><span className={`mom-value ${wowTone}`}>{wowLabel}</span></td><td><div className="achievement-cell"><div><span style={{ width: `${Math.min(shop.viewAchievement, 100)}%` }} /></div><em className={tone(shop.viewAchievement)}>{shop.viewAchievement.toFixed(1)}%</em></div></td><td className={shop.viewActual - shop.viewTarget >= 0 ? "positive-gap" : "gap"}>{tableValue(shop.viewActual - shop.viewTarget)}</td></tr>;
+          })}
         </tbody></table></div>
       </section>
 
