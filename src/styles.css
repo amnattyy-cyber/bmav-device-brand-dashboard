@@ -75,7 +75,7 @@ h1 span { color: var(--purple); }
 .wow-heading { margin-bottom: 18px; }
 .wow-status { padding: 8px 13px; border-radius: 999px; font-size: 12px; font-weight: 900; }
 .wow-status.up { color: #087443; background: #dcfce7; }.wow-status.down { color: #b91c1c; background: #fee2e2; }
-.week-picker { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 7px; border-radius: 16px; background: #e9edf4; }
+.week-picker { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 7px; border-radius: 16px; background: #e9edf4; }
 .week-picker button { min-height: 61px; padding: 9px; border: 0; border-radius: 11px; background: transparent; color: var(--muted); cursor: pointer; }
 .week-picker button span, .week-picker button small { display: block; }.week-picker button span { font-weight: 900; }.week-picker button small { margin-top: 3px; font-size: 9px; }
 .week-picker button.selected { color: white; background: linear-gradient(135deg, #7c3aed, #2563eb); box-shadow: 0 8px 18px rgba(91,33,182,.24); }.week-picker button:disabled { opacity: .42; cursor: not-allowed; }
@@ -145,7 +145,7 @@ footer { margin-top: 85px; border-top: 1px solid var(--line); min-height: 120px;
 @media (max-width: 620px) {
   .shell { width: min(100% - 24px, 1180px); }.hero { padding-top: 45px; gap: 20px; }.hero::after { left: -20%; right: -60%; }.hero-copy > p { font-size: 15px; }.hero-actions { flex-direction: column; }.download-button { justify-content: space-between; }.filter-dock { grid-template-columns: 1fr; padding: 12px; }.shop-filter, .performance-filter { grid-column: auto; }.context-line { margin-top: 14px; }.kpi-grid { grid-template-columns: 1fr; margin-top: 14px; }.kpi-card { min-height: 145px; }.section { padding-top: 58px; }.brand-grid { grid-template-columns: 1fr 1fr; }.section-heading, .panel-head { align-items: flex-start; flex-direction: column; }.trend-legend { align-self: flex-end; }.panel { padding: 18px; }.daily-chart { margin-inline: -5px; }.trend-foot b { display: none; }footer { align-items: flex-start; flex-direction: column; justify-content: center; gap: 8px; }.shop-heading { flex-direction: row; align-items: center; }
   .brand-card { padding: 14px; }.brand-card-top { gap: 6px; }.brand-mark { width: 30px; height: 30px; flex: 0 0 30px; }.brand-card-top strong { font-size: 11px; }.brand-mom { padding: 2px 4px; font-size: 8px; }
-  .week-picker { grid-template-columns: 1fr 1fr; }.week-picker button:last-child { grid-column: span 2; }.wow-kpis, .wow-analysis-grid { grid-template-columns: 1fr; }.action-panel { grid-column: auto; }
+  .week-picker { grid-template-columns: 1fr 1fr; }.wow-kpis, .wow-analysis-grid { grid-template-columns: 1fr; }.action-panel { grid-column: auto; }
   .wow-brand-chart { padding: 17px 12px 18px; }.wow-brand-chart header { align-items: flex-start; flex-direction: column; gap: 5px; }.wow-brand-chart header p { text-align: left; }.chart-side-labels { padding-left: 80px; }.diverging-row { grid-template-columns: 70px minmax(0, 1fr); padding-inline: 3px; }.diverging-row > strong { font-size: 9px; }.diverging-track em { font-size: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
