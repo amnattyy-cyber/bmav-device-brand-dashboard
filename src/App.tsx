@@ -32,14 +32,43 @@ const compactChart = (value: number) => value >= 1_000_000
     : integer.format(value);
 const sumTo = (values: number[], day: number) => values.slice(0, day).reduce((sum, value) => sum + value, 0);
 const weekRanges: WeekRange[] = [
-  { start: 1, end: 7, label: "1–7 Aug" },
-  { start: 8, end: 14, label: "8–14 Aug" },
-  { start: 15, end: 21, label: "15–21 Aug" },
-  { start: 22, end: 28, label: "22–28 Aug" },
-  { start: 29, end: 31, label: "29–31 Aug" },
+  { start: 3, end: 9, label: "3–9 Aug" },
+  { start: 10, end: 16, label: "10–16 Aug" },
+  { start: 17, end: 23, label: "17–23 Aug" },
+  { start: 24, end: 30, label: "24–30 Aug" },
 ];
-const weekIndexForDay = (day: number) => Math.max(0, weekRanges.findIndex((range) => day >= range.start && day <= range.end));
+const weekIndexForDay = (day: number) => {
+  const index = weekRanges.findIndex((range) => day >= range.start && day <= range.end);
+  return index >= 0 ? index : day < weekRanges[0].start ? 0 : weekRanges.length - 1;
+};
 const rangeSum = (values: number[] | undefined, start: number, end: number) => (values ?? []).slice(start - 1, end).reduce((sum, value) => sum + value, 0);
+const previousWeekSnapshot = (row: DataRow, range: WeekRange, currentDays: number, previousMonthDays: number): WeekSnapshot => {
+  if (!currentDays) return { net: 0, qty: 0 };
+  const start = range.start - 7;
+  const end = start + currentDays - 1;
+  const sumMetric = (current: number[] | undefined, previous: number[] | undefined) => {
+    const previousMonthValue = start <= 0
+      ? rangeSum(previous, previousMonthDays + start, previousMonthDays + Math.min(end, 0))
+      : 0;
+    const currentMonthValue = end >= 1 ? rangeSum(current, Math.max(start, 1), end) : 0;
+    return previousMonthValue + currentMonthValue;
+  };
+  return {
+    net: sumMetric(row.dailyNet, row.previousDailyNet),
+    qty: sumMetric(row.dailyQty, row.previousDailyQty),
+  };
+};
+const previousWeekLabel = (range: WeekRange, currentDays: number, previousMonthDays: number) => {
+  const start = range.start - 7;
+  const end = start + currentDays - 1;
+  if (start <= 0) {
+    const previousStart = previousMonthDays + start;
+    return end <= 0
+      ? `${previousStart}–${previousMonthDays + end} Jul`
+      : `${previousStart} Jul–${end} Aug`;
+  }
+  return `${start}–${end} Aug`;
+};
 const changeRate = (current: number, previous: number) => previous ? ((current - previous) / previous) * 100 : current ? 100 : 0;
 const signed = (value: number, digits = 1) => `${value > 0 ? "+" : ""}${value.toFixed(digits)}%`;
 
@@ -216,14 +245,8 @@ export default function Home() {
     const currentDays = Math.max(0, currentEnd - range.start + 1);
     const snapshot = (row: DataRow, previous = false): WeekSnapshot => {
       if (!currentDays) return { net: 0, qty: 0 };
-      if (previous && selectedWeek === 0) {
-        const previousMonthEnd = previousMonthDays;
-        return {
-          net: rangeSum(row.previousDailyNet, previousMonthEnd - currentDays + 1, previousMonthEnd),
-          qty: rangeSum(row.previousDailyQty, previousMonthEnd - currentDays + 1, previousMonthEnd),
-        };
-      }
-      const start = previous ? weekRanges[selectedWeek - 1].start : range.start;
+      if (previous) return previousWeekSnapshot(row, range, currentDays, previousMonthDays);
+      const start = range.start;
       return {
         net: rangeSum(row.dailyNet, start, start + currentDays - 1),
         qty: rangeSum(row.dailyQty, start, start + currentDays - 1),
@@ -258,7 +281,7 @@ export default function Home() {
     const action = netRate < 0
       ? `เร่งกู้ยอดที่ ${leadShop?.name ?? "สาขาที่ติดลบ"} โดยโฟกัส ${leadBrand?.name ?? "Brand ที่ลดลง"}; ${qtyRate < 0 ? "เพิ่ม conversion และ stock รุ่นขายดี" : "ดัน mix รุ่นมูลค่าสูงและ attach offer"}`
       : `รักษาแรงส่ง ${leadBrand?.name ?? "Brand นำ"} ที่ ${leadShop?.name ?? "สาขานำ"} และถอด playbook ไปยังสาขาที่ contribution ลดลง`;
-    const previousLabel = selectedWeek === 0 ? `${previousMonthDays - currentDays + 1}–${previousMonthDays} Jul` : `${weekRanges[selectedWeek - 1].start}–${weekRanges[selectedWeek - 1].start + currentDays - 1} Aug`;
+    const previousLabel = previousWeekLabel(range, currentDays, previousMonthDays);
     return { range, currentEnd, currentDays, current, previous, netRate, qtyRate, currentAsp, previousAsp, aspRate, brandDrivers, shopDrivers, leadBrand, leadShop, direction, cause, action, previousLabel };
   }, [data.shops, latestDay, previousMonthDays, selectedBrand, selectedShops, selectedWeek]);
 
@@ -268,13 +291,8 @@ export default function Home() {
     const currentDays = Math.max(0, currentEnd - range.start + 1);
     const snapshot = (row: DataRow, previous = false): WeekSnapshot => {
       if (!currentDays) return { net: 0, qty: 0 };
-      if (previous && selectedWeek === 0) {
-        return {
-          net: rangeSum(row.previousDailyNet, previousMonthDays - currentDays + 1, previousMonthDays),
-          qty: rangeSum(row.previousDailyQty, previousMonthDays - currentDays + 1, previousMonthDays),
-        };
-      }
-      const start = previous ? weekRanges[selectedWeek - 1].start : range.start;
+      if (previous) return previousWeekSnapshot(row, range, currentDays, previousMonthDays);
+      const start = range.start;
       return {
         net: rangeSum(row.dailyNet, start, start + currentDays - 1),
         qty: rangeSum(row.dailyQty, start, start + currentDays - 1),
@@ -295,14 +313,10 @@ export default function Home() {
     const currentEnd = Math.min(range.end, latestDay);
     const currentDays = Math.max(0, currentEnd - range.start + 1);
     const valueFor = (row: DataRow, previous = false) => {
-      const values = metric === "net"
-        ? (previous && selectedWeek === 0 ? row.previousDailyNet : row.dailyNet)
-        : (previous && selectedWeek === 0 ? row.previousDailyQty : row.dailyQty);
       if (!currentDays) return 0;
-      const start = previous
-        ? selectedWeek === 0 ? previousMonthDays - currentDays + 1 : weekRanges[selectedWeek - 1].start
-        : range.start;
-      return rangeSum(values, start, start + currentDays - 1);
+      if (previous) return previousWeekSnapshot(row, range, currentDays, previousMonthDays)[metric];
+      const values = metric === "net" ? row.dailyNet : row.dailyQty;
+      return rangeSum(values, range.start, range.start + currentDays - 1);
     };
 
     return new Map(shopViews.map((shop) => {
