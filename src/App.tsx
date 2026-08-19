@@ -350,9 +350,15 @@ export default function Home() {
 
   const modelAreaMatrix = useMemo(() => {
     const scopedRows = data.shops.filter((row) => selectedShops.length === 0 || selectedShops.includes(row.code));
-    const dailyValue = (row: DataRow) => (metric === "net" ? row.dailyNet : row.dailyQty)[selectedDay - 1] || 0;
+    const performanceValue = (row: DataRow) => {
+      const values = metric === "net" ? row.dailyNet : row.dailyQty;
+      const mtdActual = sumTo(values, selectedDay);
+      if (viewMode === "day") return values[selectedDay - 1] || 0;
+      if (viewMode === "runrate") return selectedDay ? (mtdActual / selectedDay) * daysInMonth : 0;
+      return mtdActual;
+    };
     const brandSales = [...new Set(scopedRows.map((row) => row.brand))]
-      .map((brand) => ({ brand, value: scopedRows.filter((row) => row.brand === brand).reduce((sum, row) => sum + dailyValue(row), 0) }))
+      .map((brand) => ({ brand, value: scopedRows.filter((row) => row.brand === brand).reduce((sum, row) => sum + performanceValue(row), 0) }))
       .sort((a, b) => b.value - a.value || a.brand.localeCompare(b.brand));
     let topBrands = brandSales.slice(0, 12).map((item) => item.brand);
     if (selectedBrand !== "ALL" && !topBrands.includes(selectedBrand)) topBrands = [...topBrands.slice(0, 11), selectedBrand];
@@ -361,14 +367,17 @@ export default function Home() {
       const row = combineRows(rows);
       const values = metric === "net" ? row.dailyNet : row.dailyQty;
       const monthlyTarget = metric === "net" ? row.targetNet : row.targetQty;
-      const actual = values[selectedDay - 1] || 0;
+      const dailyActual = values[selectedDay - 1] || 0;
       const mtdActual = sumTo(values, selectedDay);
       const dailyTarget = monthlyTarget / daysInMonth;
+      const targetToDate = dailyTarget * selectedDay;
       const runRate = selectedDay ? (mtdActual / selectedDay) * daysInMonth : 0;
-      const achievement = dailyTarget ? (actual / dailyTarget) * 100 : 0;
+      const actual = viewMode === "day" ? dailyActual : viewMode === "runrate" ? runRate : mtdActual;
+      const viewTarget = viewMode === "day" ? dailyTarget : viewMode === "runrate" ? monthlyTarget : targetToDate;
+      const achievement = viewTarget ? (actual / viewTarget) * 100 : 0;
       const runRatePercent = monthlyTarget ? (runRate / monthlyTarget) * 100 : 0;
       const rankingValue = matrixRanking === "achieve" ? achievement : matrixRanking === "runrate" ? runRatePercent : actual;
-      return { actual, monthlyTarget, runRate, achievement, runRatePercent, rankingValue };
+      return { actual, dailyActual, mtdActual, monthlyTarget, viewTarget, runRate, achievement, runRatePercent, rankingValue };
     };
 
     const shopRows = [...new Set(scopedRows.map((row) => row.code))].map((code) => {
@@ -403,7 +412,7 @@ export default function Home() {
       return bCell.rankingValue - aCell.rankingValue || a.shop.localeCompare(b.shop);
     });
     return { topBrands, shopRows: sortedRows, allShop, ranks, activeSort };
-  }, [data.shops, daysInMonth, matrixRanking, matrixSortBrand, metric, selectedBrand, selectedDay, selectedShops]);
+  }, [data.shops, daysInMonth, matrixRanking, matrixSortBrand, metric, selectedBrand, selectedDay, selectedShops, viewMode]);
 
   const matrixRankClass = (rank: number | undefined, total: number) => {
     if (!rank) return "matrix-rank-none";
@@ -415,7 +424,7 @@ export default function Home() {
   };
 
   const matrixCell = (cell: typeof modelAreaMatrix.allShop.all, rank?: number, isTotal = false) => {
-    const label = `${metricLabel} วันที่ ${selectedDay} Aug ${displayValue(cell.actual)}, Run Rate ${displayValue(cell.runRate)}, Target ${displayValue(cell.monthlyTarget)}, %Runrate ${cell.runRatePercent.toFixed(1)}%`;
+    const label = `${modeCopy.actual} ${metricLabel} ${displayValue(cell.actual)}, Run Rate ${displayValue(cell.runRate)}, Target ${displayValue(cell.monthlyTarget)}, %Ach ${cell.achievement.toFixed(1)}%, %Runrate ${cell.runRatePercent.toFixed(1)}%`;
     return <div className={`matrix-cell ${isTotal ? "matrix-total-cell" : matrixRankClass(rank, modelAreaMatrix.shopRows.length)}`} title={label} aria-label={label}>
       <div><strong>{metric === "net" ? compactChart(cell.actual) : integer.format(cell.actual)}</strong>{!isTotal && rank && <span>#{rank}</span>}</div>
       <small>%RR {cell.runRatePercent.toFixed(1)}%</small>
@@ -515,7 +524,7 @@ export default function Home() {
 
       <section className={`section model-area-section shell ${matrixCapture ? "capture-mode" : ""}`} aria-labelledby="model-area-title">
         <div className="section-heading model-area-heading">
-          <div><span className="section-number">03</span><h2 id="model-area-title">Model x Area · Ranking</h2><p>Top {modelAreaMatrix.topBrands.length} Brand ตามยอดขาย {metricLabel} วันที่ {selectedDay} Aug • ตัวเลขหลักเป็นยอดขายของวัน และ %RR คือ Run Rate เทียบ Target</p></div>
+          <div><span className="section-number">03</span><h2 id="model-area-title">Model x Area · Ranking</h2><p>Top {modelAreaMatrix.topBrands.length} Brand ตาม {modeCopy.actual} {metricLabel} • {viewMode === "day" ? `วันที่ ${selectedDay} Aug` : viewMode === "runrate" ? `ประมาณการสิ้นเดือนจากยอดสะสมถึง ${selectedDay} Aug` : `ยอดสะสมถึง ${selectedDay} Aug`} • %RR คือ Run Rate เทียบ Target</p></div>
           <div className="matrix-actions"><button className={`capture-view-button ${matrixCapture ? "active" : ""}`} type="button" aria-pressed={matrixCapture} onClick={toggleMatrixCapture}><span aria-hidden="true">{matrixCapture ? "×" : "▣"}</span>{matrixCapture ? "ออกจาก Capture" : "Capture View"}</button><div className="matrix-ranking-control" role="group" aria-label="เลือกเกณฑ์จัดอันดับสี"><span>จัดสีตามอันดับ</span><div className="segmented"><button className={matrixRanking === "rank" ? "selected" : ""} onClick={() => setMatrixRanking("rank")}>Rank</button><button className={matrixRanking === "achieve" ? "selected" : ""} onClick={() => setMatrixRanking("achieve")}>% Ach</button><button className={matrixRanking === "runrate" ? "selected" : ""} onClick={() => setMatrixRanking("runrate")}>%Runrate</button></div></div></div>
         </div>
         <div className="matrix-legend"><span><i className="matrix-swatch best" /> อันดับสูง</span><span><i className="matrix-swatch middle" /> กลาง</span><span><i className="matrix-swatch low" /> ต้องเร่ง</span><small>{matrixCapture ? "Capture View แสดงทุก Brand ในภาพเดียว • กด Esc เพื่อออก" : "คลิกชื่อคอลัมน์เพื่อเรียงสาขา • เลื่อนเมาส์ที่ตัวเลขเพื่อดูยอด, Run Rate และ Target"}</small></div>
