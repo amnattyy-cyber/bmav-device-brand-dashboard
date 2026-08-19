@@ -5,6 +5,7 @@ import { fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DataRow }
 
 type Metric = "net" | "qty";
 type ViewMode = "day" | "mtd" | "achieve" | "runrate";
+type MatrixRanking = "rank" | "achieve" | "runrate";
 type SourceStatus = "loading" | "live" | "fallback";
 type WeekRange = { start: number; end: number; label: string };
 type WeekSnapshot = { net: number; qty: number };
@@ -110,6 +111,9 @@ export default function Home() {
   const [selectedShops, setSelectedShops] = useState<string[]>([]);
   const [selectedDay, setSelectedDay] = useState(Number(fallbackData.latest.slice(-2)));
   const [selectedWeek, setSelectedWeek] = useState(weekIndexForDay(Number(fallbackData.latest.slice(-2))));
+  const [matrixRanking, setMatrixRanking] = useState<MatrixRanking>("rank");
+  const [matrixSortBrand, setMatrixSortBrand] = useState("ALL");
+  const [matrixCapture, setMatrixCapture] = useState(false);
   const previousLatestDay = useRef(Number(fallbackData.latest.slice(-2)));
   const latestDay = Number(data.latest.slice(-2));
   const monthPrefix = data.latest.slice(0, 7);
@@ -143,6 +147,15 @@ export default function Home() {
     setSelectedWeek((current) => current === weekIndexForDay(priorLatestDay) ? weekIndexForDay(latestDay) : current);
     previousLatestDay.current = latestDay;
   }, [latestDay]);
+
+  useEffect(() => {
+    if (!matrixCapture) return;
+    const exitCapture = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMatrixCapture(false);
+    };
+    window.addEventListener("keydown", exitCapture);
+    return () => window.removeEventListener("keydown", exitCapture);
+  }, [matrixCapture]);
 
   const shopOptions = useMemo(() => {
     const rows = selectedBrand === "ALL" ? data.shops : data.shops.filter((row) => row.brand === selectedBrand);
@@ -335,8 +348,90 @@ export default function Home() {
     return { rows: rows.sort((a, b) => (b.rate ?? 0) - (a.rate ?? 0)), maxMagnitude };
   }, [brandWow, data.brands]);
 
+  const modelAreaMatrix = useMemo(() => {
+    const scopedRows = data.shops.filter((row) => selectedShops.length === 0 || selectedShops.includes(row.code));
+    const dailyValue = (row: DataRow) => (metric === "net" ? row.dailyNet : row.dailyQty)[selectedDay - 1] || 0;
+    const brandSales = [...new Set(scopedRows.map((row) => row.brand))]
+      .map((brand) => ({ brand, value: scopedRows.filter((row) => row.brand === brand).reduce((sum, row) => sum + dailyValue(row), 0) }))
+      .sort((a, b) => b.value - a.value || a.brand.localeCompare(b.brand));
+    let topBrands = brandSales.slice(0, 12).map((item) => item.brand);
+    if (selectedBrand !== "ALL" && !topBrands.includes(selectedBrand)) topBrands = [...topBrands.slice(0, 11), selectedBrand];
+
+    const cellFor = (rows: DataRow[]) => {
+      const row = combineRows(rows);
+      const values = metric === "net" ? row.dailyNet : row.dailyQty;
+      const monthlyTarget = metric === "net" ? row.targetNet : row.targetQty;
+      const actual = values[selectedDay - 1] || 0;
+      const mtdActual = sumTo(values, selectedDay);
+      const dailyTarget = monthlyTarget / daysInMonth;
+      const runRate = selectedDay ? (mtdActual / selectedDay) * daysInMonth : 0;
+      const achievement = dailyTarget ? (actual / dailyTarget) * 100 : 0;
+      const runRatePercent = monthlyTarget ? (runRate / monthlyTarget) * 100 : 0;
+      const rankingValue = matrixRanking === "achieve" ? achievement : matrixRanking === "runrate" ? runRatePercent : actual;
+      return { actual, monthlyTarget, runRate, achievement, runRatePercent, rankingValue };
+    };
+
+    const shopRows = [...new Set(scopedRows.map((row) => row.code))].map((code) => {
+      const rows = scopedRows.filter((row) => row.code === code);
+      return {
+        code,
+        shop: rows[0]?.shop ?? code,
+        all: cellFor(rows),
+        brands: Object.fromEntries(topBrands.map((brand) => [brand, cellFor(rows.filter((row) => row.brand === brand))])),
+      };
+    });
+    const allShop = {
+      code: "ALL_SHOP",
+      shop: "ALL Shop",
+      all: cellFor(scopedRows),
+      brands: Object.fromEntries(topBrands.map((brand) => [brand, cellFor(scopedRows.filter((row) => row.brand === brand))])),
+    };
+    const columns = ["ALL", ...topBrands];
+    const ranks = new Map<string, number>();
+    for (const column of columns) {
+      const scoreFor = (row: typeof shopRows[number]) => column === "ALL" ? row.all.rankingValue : row.brands[column].rankingValue;
+      const uniqueScores = [...new Set(shopRows.map(scoreFor).filter((score) => score > 0))].sort((a, b) => b - a);
+      for (const row of shopRows) {
+        const score = scoreFor(row);
+        if (score > 0) ranks.set(`${column}|${row.code}`, uniqueScores.indexOf(score) + 1);
+      }
+    }
+    const activeSort = columns.includes(matrixSortBrand) ? matrixSortBrand : "ALL";
+    const sortedRows = [...shopRows].sort((a, b) => {
+      const aCell = activeSort === "ALL" ? a.all : a.brands[activeSort];
+      const bCell = activeSort === "ALL" ? b.all : b.brands[activeSort];
+      return bCell.rankingValue - aCell.rankingValue || a.shop.localeCompare(b.shop);
+    });
+    return { topBrands, shopRows: sortedRows, allShop, ranks, activeSort };
+  }, [data.shops, daysInMonth, matrixRanking, matrixSortBrand, metric, selectedBrand, selectedDay, selectedShops]);
+
+  const matrixRankClass = (rank: number | undefined, total: number) => {
+    if (!rank) return "matrix-rank-none";
+    if (rank === 1) return "matrix-rank-1";
+    if (rank === 2) return "matrix-rank-2";
+    if (rank === 3) return "matrix-rank-3";
+    const percentile = rank / Math.max(total, 1);
+    return percentile <= 0.4 ? "matrix-rank-high" : percentile <= 0.7 ? "matrix-rank-mid" : "matrix-rank-low";
+  };
+
+  const matrixCell = (cell: typeof modelAreaMatrix.allShop.all, rank?: number, isTotal = false) => {
+    const label = `${metricLabel} วันที่ ${selectedDay} Aug ${displayValue(cell.actual)}, Run Rate ${displayValue(cell.runRate)}, Target ${displayValue(cell.monthlyTarget)}, %Runrate ${cell.runRatePercent.toFixed(1)}%`;
+    return <div className={`matrix-cell ${isTotal ? "matrix-total-cell" : matrixRankClass(rank, modelAreaMatrix.shopRows.length)}`} title={label} aria-label={label}>
+      <div><strong>{metric === "net" ? compactChart(cell.actual) : integer.format(cell.actual)}</strong>{!isTotal && rank && <span>#{rank}</span>}</div>
+      <small>%RR {cell.runRatePercent.toFixed(1)}%</small>
+    </div>;
+  };
+
+  const toggleMatrixCapture = () => {
+    setMatrixCapture((current) => {
+      const next = !current;
+      if (next) window.requestAnimationFrame(() => document.getElementById("model-area-title")?.scrollIntoView({ block: "start" }));
+      return next;
+    });
+  };
+
   return (
-    <main>
+    <main className={matrixCapture ? "matrix-capture-active" : ""}>
       <section className="hero shell">
         <div className="hero-copy">
           <div className="eyebrow"><span className="live-dot" /> BMAV • DEVICE PERFORMANCE</div>
@@ -418,8 +513,25 @@ export default function Home() {
         <aside className="focus-panel panel"><span className="section-number">PERFORMANCE FOCUS</span><h2>{metricLabel}</h2><p>{selectedBrand === "ALL" ? "ALL BRANDS" : selectedBrand} • {shopName}</p><div className="focus-meter"><span style={{ width: `${Math.min(achievement, 100)}%`, background: selectedColor }} /></div><div className="focus-stats"><span><small>{modeCopy.actual}</small><strong>{displayValue(actual)}</strong><small>{modeCopy.title}</small></span><span><small>{modeCopy.target}</small><strong>{displayValue(target)}</strong><small>{modeCopy.title}</small></span></div><div className="pace-note"><span>{modeCopy.short}</span><p>{viewMode === "runrate" ? `ประมาณการสิ้นเดือนจากยอดขายเฉลี่ย ${selectedDay} วัน` : `ข้อมูลถึงวันที่ ${thaiDate(selectedDay)}`} • เลือก Net Amount / Qty ได้ทันที</p></div></aside>
       </section>
 
+      <section className={`section model-area-section shell ${matrixCapture ? "capture-mode" : ""}`} aria-labelledby="model-area-title">
+        <div className="section-heading model-area-heading">
+          <div><span className="section-number">03</span><h2 id="model-area-title">Model x Area · Ranking</h2><p>Top {modelAreaMatrix.topBrands.length} Brand ตามยอดขาย {metricLabel} วันที่ {selectedDay} Aug • ตัวเลขหลักเป็นยอดขายของวัน และ %RR คือ Run Rate เทียบ Target</p></div>
+          <div className="matrix-actions"><button className={`capture-view-button ${matrixCapture ? "active" : ""}`} type="button" aria-pressed={matrixCapture} onClick={toggleMatrixCapture}><span aria-hidden="true">{matrixCapture ? "×" : "▣"}</span>{matrixCapture ? "ออกจาก Capture" : "Capture View"}</button><div className="matrix-ranking-control" role="group" aria-label="เลือกเกณฑ์จัดอันดับสี"><span>จัดสีตามอันดับ</span><div className="segmented"><button className={matrixRanking === "rank" ? "selected" : ""} onClick={() => setMatrixRanking("rank")}>Rank</button><button className={matrixRanking === "achieve" ? "selected" : ""} onClick={() => setMatrixRanking("achieve")}>% Ach</button><button className={matrixRanking === "runrate" ? "selected" : ""} onClick={() => setMatrixRanking("runrate")}>%Runrate</button></div></div></div>
+        </div>
+        <div className="matrix-legend"><span><i className="matrix-swatch best" /> อันดับสูง</span><span><i className="matrix-swatch middle" /> กลาง</span><span><i className="matrix-swatch low" /> ต้องเร่ง</span><small>{matrixCapture ? "Capture View แสดงทุก Brand ในภาพเดียว • กด Esc เพื่อออก" : "คลิกชื่อคอลัมน์เพื่อเรียงสาขา • เลื่อนเมาส์ที่ตัวเลขเพื่อดูยอด, Run Rate และ Target"}</small></div>
+        <div className="model-area-wrap">
+          <table className="model-area-table">
+            <thead><tr><th>Shop / Area</th><th className={`all-model-column ${modelAreaMatrix.activeSort === "ALL" ? "sorted" : ""}`}><button onClick={() => setMatrixSortBrand("ALL")}><strong>ALL MODEL</strong><small>รวมทุก Brand/รุ่น</small></button></th>{modelAreaMatrix.topBrands.map((brand) => <th className={`${selectedBrand === brand ? "selected-brand-column" : ""} ${modelAreaMatrix.activeSort === brand ? "sorted" : ""}`} key={brand}><button onClick={() => setMatrixSortBrand(brand)}><strong>{brand}</strong><small>คลิกเพื่อเรียง</small></button></th>)}</tr></thead>
+            <tbody>
+              <tr className="all-shop-row"><th><strong>ALL Shop</strong><small>ผลรวมทุกสาขา · ไม่จัดอันดับ</small></th><td>{matrixCell(modelAreaMatrix.allShop.all, undefined, true)}</td>{modelAreaMatrix.topBrands.map((brand) => <td className={selectedBrand === brand ? "selected-brand-column" : ""} key={brand}>{matrixCell(modelAreaMatrix.allShop.brands[brand], undefined, true)}</td>)}</tr>
+              {modelAreaMatrix.shopRows.map((row) => <tr key={row.code}><th><strong>{row.shop}</strong><small>{row.code}</small></th><td className="all-model-column">{matrixCell(row.all, modelAreaMatrix.ranks.get(`ALL|${row.code}`))}</td>{modelAreaMatrix.topBrands.map((brand) => <td className={selectedBrand === brand ? "selected-brand-column" : ""} key={brand}>{matrixCell(row.brands[brand], modelAreaMatrix.ranks.get(`${brand}|${row.code}`))}</td>)}</tr>)}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section className="section shop-performance-section shell">
-        <div className="section-heading shop-heading"><div><span className="section-number">03</span><h2>Shop Performance</h2><p>{selectedBrand === "ALL" ? "สาขาที่มี Target ใน BMAV" : `เฉพาะสาขาที่มี Target ${selectedBrand}`} • {modeCopy.title} • MoM เทียบ Jul</p></div><span className="shop-count">{shopViews.length} สาขา</span></div>
+        <div className="section-heading shop-heading"><div><span className="section-number">04</span><h2>Shop Performance</h2><p>{selectedBrand === "ALL" ? "สาขาที่มี Target ใน BMAV" : `เฉพาะสาขาที่มี Target ${selectedBrand}`} • {modeCopy.title} • MoM เทียบ Jul</p></div><span className="shop-count">{shopViews.length} สาขา</span></div>
         <section className="wow-brand-chart" aria-labelledby="brand-wow-chart-title">
           <header><div><span>WEEK COMPARISON</span><h3 id="brand-wow-chart-title">%WoW by Brand</h3></div><p>{metricLabel} • {wow.range.label} เทียบ {wow.previousLabel} • จำนวนวันเท่ากัน</p></header>
           <div className="diverging-chart" role="img" aria-label={`กราฟเปอร์เซ็นต์ Week on Week แยกตาม Brand สำหรับ ${metricLabel}`}>
