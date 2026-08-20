@@ -158,9 +158,10 @@ export default function Home() {
   }, [matrixCapture]);
 
   const shopOptions = useMemo(() => {
-    const rows = selectedBrand === "ALL" ? data.shops : data.shops.filter((row) => row.brand === selectedBrand);
+    const rows = (selectedBrand === "ALL" ? data.shops : data.shops.filter((row) => row.brand === selectedBrand))
+      .filter((row) => row.targetQty > 0 || row.targetNet > 0 || sumTo(row.dailyQty, latestDay) > 0 || sumTo(row.dailyNet, latestDay) > 0);
     return [...new Map(rows.map((row) => [row.code, row.shop])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [data.shops, selectedBrand]);
+  }, [data.shops, latestDay, selectedBrand]);
 
   const chooseBrand = (brand: string) => {
     setSelectedBrand(brand);
@@ -235,9 +236,9 @@ export default function Home() {
       .filter((row) => selectedShops.length === 0 || selectedShops.includes(String(row.code)))
       .map((row) => {
         const view = getViewMetrics(row);
-        return { ...row, viewTarget: view.target, viewActual: view.actual, viewPrevious: view.previous, viewAchievement: view.achievement };
+        return { ...row, viewTarget: view.target, viewActual: view.actual, viewPrevious: view.previous, viewAchievement: view.achievement, hasTarget: view.monthlyTarget > 0, hasSales: view.mtdActual > 0 };
       })
-      .filter((row) => row.viewTarget > 0)
+      .filter((row) => row.hasTarget || row.hasSales)
       .sort((a, b) => viewMode === "mtd" || viewMode === "day" ? b.viewActual - a.viewActual : b.viewAchievement - a.viewAchievement);
   }, [data.shops, getViewMetrics, selectedBrand, selectedShops, viewMode]);
 
@@ -388,7 +389,7 @@ export default function Home() {
         all: cellFor(rows),
         brands: Object.fromEntries(topBrands.map((brand) => [brand, cellFor(rows.filter((row) => row.brand === brand))])),
       };
-    });
+    }).filter((row) => row.all.monthlyTarget > 0 || row.all.mtdActual > 0);
     const allShop = {
       code: "ALL_SHOP",
       shop: "ALL Shop",
@@ -424,10 +425,13 @@ export default function Home() {
   };
 
   const matrixCell = (cell: typeof modelAreaMatrix.allShop.all, rank?: number, isTotal = false) => {
-    const label = `${modeCopy.actual} ${metricLabel} ${displayValue(cell.actual)}, Run Rate ${displayValue(cell.runRate)}, Target ${displayValue(cell.monthlyTarget)}, %Ach ${cell.achievement.toFixed(1)}%, %Runrate ${cell.runRatePercent.toFixed(1)}%`;
+    const hasTarget = cell.monthlyTarget > 0;
+    const hasSales = cell.mtdActual > 0;
+    const targetLabel = hasTarget ? displayValue(cell.monthlyTarget) : "ไม่มี Target";
+    const label = `${modeCopy.actual} ${metricLabel} ${displayValue(cell.actual)}, Run Rate ${displayValue(cell.runRate)}, Target ${targetLabel}, %Ach ${hasTarget ? `${cell.achievement.toFixed(1)}%` : "—"}, %Runrate ${hasTarget ? `${cell.runRatePercent.toFixed(1)}%` : "—"}`;
     return <div className={`matrix-cell ${isTotal ? "matrix-total-cell" : matrixRankClass(rank, modelAreaMatrix.shopRows.length)}`} title={label} aria-label={label}>
       <div><strong>{metric === "net" ? compactChart(cell.actual) : integer.format(cell.actual)}</strong>{!isTotal && rank && <span>#{rank}</span>}</div>
-      <small>%RR {cell.runRatePercent.toFixed(1)}%</small>
+      <small>{hasTarget ? `%RR ${cell.runRatePercent.toFixed(1)}%` : hasSales ? "No Target • มี Sales" : "—"}</small>
     </div>;
   };
 
@@ -460,7 +464,7 @@ export default function Home() {
       <section className="filter-dock shell" aria-label="ตัวกรอง Dashboard">
         <div className="filter-group metric-filter"><span className="filter-label">มุมมองหลัก</span><div className="segmented"><button className={metric === "net" ? "selected" : ""} onClick={() => setMetric("net")}>Net Amount</button><button className={metric === "qty" ? "selected" : ""} onClick={() => setMetric("qty")}>Qty</button></div></div>
         <div className="filter-group"><label htmlFor="brand-filter">Brand</label><select id="brand-filter" value={selectedBrand} onChange={(event) => chooseBrand(event.target.value)}><option value="ALL">ALL BRANDS</option>{data.brands.map((row) => <option key={row.brand} value={row.brand}>{row.brand}</option>)}</select></div>
-        <div className="filter-group shop-filter"><span className="filter-label">สาขา</span><details className="shop-multiselect"><summary><span>{selectedShops.length === 0 ? "ทุกสาขาที่มี Target" : `${selectedShops.length} สาขาที่เลือก`}</span><b aria-hidden="true">⌄</b></summary><div className="shop-menu"><label className="shop-option all-shops"><input type="checkbox" checked={selectedShops.length === 0} onChange={() => setSelectedShops([])} /><span>ทุกสาขาที่มี Target</span></label><div className="shop-option-list">{shopOptions.map(([code, shop]) => <label className="shop-option" key={code}><input type="checkbox" checked={selectedShops.includes(code)} onChange={() => toggleShop(code)} /><span>{shop}</span></label>)}</div></div></details></div>
+        <div className="filter-group shop-filter"><span className="filter-label">สาขา</span><details className="shop-multiselect"><summary><span>{selectedShops.length === 0 ? "ทุกสาขาที่มี Target หรือยอดขาย" : `${selectedShops.length} สาขาที่เลือก`}</span><b aria-hidden="true">⌄</b></summary><div className="shop-menu"><label className="shop-option all-shops"><input type="checkbox" checked={selectedShops.length === 0} onChange={() => setSelectedShops([])} /><span>ทุกสาขาที่มี Target หรือยอดขาย</span></label><div className="shop-option-list">{shopOptions.map(([code, shop]) => <label className="shop-option" key={code}><input type="checkbox" checked={selectedShops.includes(code)} onChange={() => toggleShop(code)} /><span>{shop}</span></label>)}</div></div></details></div>
         <div className="filter-group performance-filter"><span className="filter-label">Performance</span><div className="segmented performance-segmented"><button className={viewMode === "mtd" ? "selected" : ""} onClick={() => setViewMode("mtd")}>MTD</button><button className={viewMode === "achieve" ? "selected" : ""} onClick={() => setViewMode("achieve")}>Achieve TD</button><button className={viewMode === "runrate" ? "selected" : ""} onClick={() => setViewMode("runrate")}>Run Rate</button><button className={viewMode === "day" ? "selected" : ""} onClick={() => setViewMode("day")}>Daily</button></div></div>
         <div className="filter-group"><label htmlFor="date-filter">วันที่ขาย</label><input id="date-filter" type="date" min={`${monthPrefix}-01`} max={data.latest} value={formatDate(selectedDay)} onChange={(event) => setSelectedDay(Number(event.target.value.slice(-2)))} /></div>
       </section>
@@ -524,7 +528,7 @@ export default function Home() {
 
       <section className={`section model-area-section shell ${matrixCapture ? "capture-mode" : ""}`} aria-labelledby="model-area-title">
         <div className="section-heading model-area-heading">
-          <div><span className="section-number">03</span><h2 id="model-area-title">Model x Area · Ranking</h2><p>Top {modelAreaMatrix.topBrands.length} Brand ตาม {modeCopy.actual} {metricLabel} • {viewMode === "day" ? `วันที่ ${selectedDay} Aug` : viewMode === "runrate" ? `ประมาณการสิ้นเดือนจากยอดสะสมถึง ${selectedDay} Aug` : `ยอดสะสมถึง ${selectedDay} Aug`} • %RR คือ Run Rate เทียบ Target</p></div>
+          <div><span className="section-number">03</span><h2 id="model-area-title">Model x Area · Ranking</h2><p>Top {modelAreaMatrix.topBrands.length} Brand ตาม {modeCopy.actual} {metricLabel} • {viewMode === "day" ? `วันที่ ${selectedDay} Aug` : viewMode === "runrate" ? `ประมาณการสิ้นเดือนจากยอดสะสมถึง ${selectedDay} Aug` : `ยอดสะสมถึง ${selectedDay} Aug`} • รวมสาขาที่ไม่มี Target แต่มียอดขาย</p></div>
           <div className="matrix-actions"><button className={`capture-view-button ${matrixCapture ? "active" : ""}`} type="button" aria-pressed={matrixCapture} onClick={toggleMatrixCapture}><span aria-hidden="true">{matrixCapture ? "×" : "▣"}</span>{matrixCapture ? "ออกจาก Capture" : "Capture View"}</button><div className="matrix-ranking-control" role="group" aria-label="เลือกเกณฑ์จัดอันดับสี"><span>จัดสีตามอันดับ</span><div className="segmented"><button className={matrixRanking === "rank" ? "selected" : ""} onClick={() => setMatrixRanking("rank")}>Rank</button><button className={matrixRanking === "achieve" ? "selected" : ""} onClick={() => setMatrixRanking("achieve")}>% Ach</button><button className={matrixRanking === "runrate" ? "selected" : ""} onClick={() => setMatrixRanking("runrate")}>%Runrate</button></div></div></div>
         </div>
         <div className="matrix-legend"><span><i className="matrix-swatch best" /> อันดับสูง</span><span><i className="matrix-swatch middle" /> กลาง</span><span><i className="matrix-swatch low" /> ต้องเร่ง</span><small>{matrixCapture ? "Capture View แสดงทุก Brand ในภาพเดียว • กด Esc เพื่อออก" : "คลิกชื่อคอลัมน์เพื่อเรียงสาขา • เลื่อนเมาส์ที่ตัวเลขเพื่อดูยอด, Run Rate และ Target"}</small></div>
@@ -533,14 +537,14 @@ export default function Home() {
             <thead><tr><th>Shop / Area</th><th className={`all-model-column ${modelAreaMatrix.activeSort === "ALL" ? "sorted" : ""}`}><button onClick={() => setMatrixSortBrand("ALL")}><strong>ALL MODEL</strong><small>รวมทุก Brand/รุ่น</small></button></th>{modelAreaMatrix.topBrands.map((brand) => <th className={`${selectedBrand === brand ? "selected-brand-column" : ""} ${modelAreaMatrix.activeSort === brand ? "sorted" : ""}`} key={brand}><button onClick={() => setMatrixSortBrand(brand)}><strong>{brand}</strong><small>คลิกเพื่อเรียง</small></button></th>)}</tr></thead>
             <tbody>
               <tr className="all-shop-row"><th><strong>ALL Shop</strong><small>ผลรวมทุกสาขา · ไม่จัดอันดับ</small></th><td>{matrixCell(modelAreaMatrix.allShop.all, undefined, true)}</td>{modelAreaMatrix.topBrands.map((brand) => <td className={selectedBrand === brand ? "selected-brand-column" : ""} key={brand}>{matrixCell(modelAreaMatrix.allShop.brands[brand], undefined, true)}</td>)}</tr>
-              {modelAreaMatrix.shopRows.map((row) => <tr key={row.code}><th><strong>{row.shop}</strong><small>{row.code}</small></th><td className="all-model-column">{matrixCell(row.all, modelAreaMatrix.ranks.get(`ALL|${row.code}`))}</td>{modelAreaMatrix.topBrands.map((brand) => <td className={selectedBrand === brand ? "selected-brand-column" : ""} key={brand}>{matrixCell(row.brands[brand], modelAreaMatrix.ranks.get(`${brand}|${row.code}`))}</td>)}</tr>)}
+              {modelAreaMatrix.shopRows.map((row) => <tr key={row.code}><th><strong>{row.shop}</strong><small>{row.code}{row.all.monthlyTarget <= 0 && row.all.mtdActual > 0 ? " · No Target" : ""}</small></th><td className="all-model-column">{matrixCell(row.all, modelAreaMatrix.ranks.get(`ALL|${row.code}`))}</td>{modelAreaMatrix.topBrands.map((brand) => <td className={selectedBrand === brand ? "selected-brand-column" : ""} key={brand}>{matrixCell(row.brands[brand], modelAreaMatrix.ranks.get(`${brand}|${row.code}`))}</td>)}</tr>)}
             </tbody>
           </table>
         </div>
       </section>
 
       <section className="section shop-performance-section shell">
-        <div className="section-heading shop-heading"><div><span className="section-number">04</span><h2>Shop Performance</h2><p>{selectedBrand === "ALL" ? "สาขาที่มี Target ใน BMAV" : `เฉพาะสาขาที่มี Target ${selectedBrand}`} • {modeCopy.title} • MoM เทียบ Jul</p></div><span className="shop-count">{shopViews.length} สาขา</span></div>
+        <div className="section-heading shop-heading"><div><span className="section-number">04</span><h2>Shop Performance</h2><p>{selectedBrand === "ALL" ? "สาขาที่มี Target หรือยอดขายใน BMAV" : `สาขาที่มี Target หรือยอดขาย ${selectedBrand}`} • {modeCopy.title} • MoM เทียบ Jul</p></div><span className="shop-count">{shopViews.length} สาขา</span></div>
         <section className="wow-brand-chart" aria-labelledby="brand-wow-chart-title">
           <header><div><span>WEEK COMPARISON</span><h3 id="brand-wow-chart-title">%WoW by Brand</h3></div><p>{metricLabel} • {wow.range.label} เทียบ {wow.previousLabel} • จำนวนวันเท่ากัน</p></header>
           <div className="diverging-chart" role="img" aria-label={`กราฟเปอร์เซ็นต์ Week on Week แยกตาม Brand สำหรับ ${metricLabel}`}>
@@ -564,7 +568,7 @@ export default function Home() {
             const isNew = weekly?.previous === 0 && (weekly?.current ?? 0) > 0;
             const wowLabel = isNew ? "NEW" : weekly?.rate == null ? "—" : signed(weekly.rate);
             const wowTone = isNew ? "mom-new" : weekly?.rate == null ? "mom-neutral" : weekly.rate >= 0 ? "mom-up" : "mom-down";
-            return <tr key={shop.code}><td><span className={`rank ${index < 3 ? "top" : ""}`}>{index + 1}</span></td><td className="shop-name"><strong>{shop.shop}</strong></td><td>{tableValue(shop.viewTarget)}</td><td><b>{tableValue(shop.viewActual)}</b></td><td><span className={`mom-value ${momTone(shop.viewActual, shop.viewPrevious)}`}>{momLabel(shop.viewActual, shop.viewPrevious)}</span></td><td><span className={`mom-value ${wowTone}`}>{wowLabel}</span></td><td><div className="achievement-cell"><div><span style={{ width: `${Math.min(shop.viewAchievement, 100)}%` }} /></div><em className={tone(shop.viewAchievement)}>{shop.viewAchievement.toFixed(1)}%</em></div></td><td className={shop.viewActual - shop.viewTarget >= 0 ? "positive-gap" : "gap"}>{tableValue(shop.viewActual - shop.viewTarget)}</td></tr>;
+            return <tr key={shop.code}><td><span className={`rank ${index < 3 ? "top" : ""}`}>{index + 1}</span></td><td className="shop-name"><strong>{shop.shop}</strong>{!shop.hasTarget && <small className="no-target-badge">No Target</small>}</td><td>{shop.hasTarget ? tableValue(shop.viewTarget) : "—"}</td><td><b>{tableValue(shop.viewActual)}</b></td><td><span className={`mom-value ${momTone(shop.viewActual, shop.viewPrevious)}`}>{momLabel(shop.viewActual, shop.viewPrevious)}</span></td><td><span className={`mom-value ${wowTone}`}>{wowLabel}</span></td><td>{shop.hasTarget ? <div className="achievement-cell"><div><span style={{ width: `${Math.min(shop.viewAchievement, 100)}%` }} /></div><em className={tone(shop.viewAchievement)}>{shop.viewAchievement.toFixed(1)}%</em></div> : <span className="not-applicable">—</span>}</td><td className={shop.hasTarget ? shop.viewActual - shop.viewTarget >= 0 ? "positive-gap" : "gap" : ""}>{shop.hasTarget ? tableValue(shop.viewActual - shop.viewTarget) : "—"}</td></tr>;
           })}
         </tbody></table></div>
       </section>
