@@ -14,6 +14,7 @@ Public interactive dashboard for BMA V - Central device performance in August 20
 - Per-brand WoW badges alongside the existing MoM badges, responsive to the selected week, metric, and shop filter
 - Model x Area ranking matrix with the top 12 brands, Daily/MTD/Run Rate values, projected run-rate achievement, per-brand shop ranks, an unranked ALL Shop total, and a compact Capture View
 - Shop Performance and Model x Area tables include shops with sales even when Target is zero, while shops with neither Target nor sales remain hidden
+- Live Shop-Brand rows are built from the union of Target_Brand and current-month Daily_Sales, so sales-only combinations are not dropped
 - Google Sheet JSONP live status with an automatic refresh every five minutes
 
 ## Week-on-week comparison

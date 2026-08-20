@@ -189,7 +189,32 @@ export async function loadGoogleSheetData(): Promise<DashboardData> {
   })).filter((row) => row.code && row.shop && row.brand);
   if (!targetRows.length) throw new Error("Google Sheet has no valid Target_Brand rows");
 
-  const shops: ShopRow[] = targetRows.map((target) => {
+  const shopSeedByKey = new Map<string, typeof targetRows[number]>();
+  for (const target of targetRows) {
+    const key = `${target.code}|${target.brand}`;
+    const current = shopSeedByKey.get(key);
+    shopSeedByKey.set(key, current ? {
+      ...current,
+      shop: target.shop || current.shop,
+      targetQty: current.targetQty + target.targetQty,
+      targetNet: current.targetNet + target.targetNet,
+    } : target);
+  }
+  for (const sale of salesRows) {
+    if (sale.date.slice(0, 7) !== monthPrefix) continue;
+    const key = `${sale.code}|${sale.brand}`;
+    if (!shopSeedByKey.has(key)) {
+      shopSeedByKey.set(key, {
+        code: sale.code,
+        shop: sale.shop || sale.code,
+        brand: sale.brand,
+        targetQty: 0,
+        targetNet: 0,
+      });
+    }
+  }
+
+  const shops: ShopRow[] = [...shopSeedByKey.values()].map((target) => {
     const key = `${target.code}|${target.brand}`;
     const baseline = baselineByShop.get(key);
     const row: ShopRow = {
