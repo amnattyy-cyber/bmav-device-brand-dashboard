@@ -5,7 +5,7 @@ Public interactive dashboard for BMA V - Central device performance in August 20
 ## Features
 
 - Net Amount as the default view, with a Qty toggle
-- Brand and target-eligible shop filters
+- Brand and Target-or-sales-eligible shop filters
 - Selectable sales date
 - Daily and month-to-date (MTD) views
 - KPI, brand performance, shop ranking, and daily trend updates from the same filters
@@ -13,6 +13,7 @@ Public interactive dashboard for BMA V - Central device performance in August 20
 - Net Amount and QTY deltas, WoW percentages, brand/shop drivers, average selling value, shop contribution signals, and a targeted action summary
 - Per-brand WoW badges alongside the existing MoM badges, responsive to the selected week, metric, and shop filter
 - Model x Area ranking matrix with the top 12 brands, Daily/MTD/Run Rate values, projected run-rate achievement, per-brand shop ranks, an unranked ALL Shop total, and a compact Capture View
+- Shop Performance and Model x Area tables include shops with sales even when Target is zero, while shops with neither Target nor sales remain hidden
 - Google Sheet JSONP live status with an automatic refresh every five minutes
 
 ## Week-on-week comparison
