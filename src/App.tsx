@@ -427,9 +427,10 @@ export default function Home() {
   const matrixCell = (cell: typeof modelAreaMatrix.allShop.all, rank?: number, isTotal = false) => {
     const hasTarget = cell.monthlyTarget > 0;
     const hasSales = cell.mtdActual > 0;
+    const hasTargetWithoutSales = !isTotal && hasTarget && !hasSales;
     const targetLabel = hasTarget ? displayValue(cell.monthlyTarget) : "ไม่มี Target";
     const label = `${modeCopy.actual} ${metricLabel} ${displayValue(cell.actual)}, Run Rate ${displayValue(cell.runRate)}, Target ${targetLabel}, %Ach ${hasTarget ? `${cell.achievement.toFixed(1)}%` : "—"}, %Runrate ${hasTarget ? `${cell.runRatePercent.toFixed(1)}%` : "—"}`;
-    return <div className={`matrix-cell ${isTotal ? "matrix-total-cell" : matrixRankClass(rank, modelAreaMatrix.shopRows.length)}`} title={label} aria-label={label}>
+    return <div className={`matrix-cell ${isTotal ? "matrix-total-cell" : matrixRankClass(rank, modelAreaMatrix.shopRows.length)} ${hasTargetWithoutSales ? "matrix-target-no-sales" : ""}`} title={label} aria-label={label}>
       <div><strong>{metric === "net" ? compactChart(cell.actual) : integer.format(cell.actual)}</strong>{!isTotal && rank && <span>#{rank}</span>}</div>
       <small>{hasTarget ? `%RR ${cell.runRatePercent.toFixed(1)}%` : hasSales ? "No Target • มี Sales" : "—"}</small>
     </div>;
@@ -534,7 +535,7 @@ export default function Home() {
         <div className="matrix-legend"><span><i className="matrix-swatch best" /> อันดับสูง</span><span><i className="matrix-swatch middle" /> กลาง</span><span><i className="matrix-swatch low" /> ต้องเร่ง</span><small>{matrixCapture ? "Capture View แสดงทุก Brand ในภาพเดียว • กด Esc เพื่อออก" : "คลิกชื่อคอลัมน์เพื่อเรียงสาขา • เลื่อนเมาส์ที่ตัวเลขเพื่อดูยอด, Run Rate และ Target"}</small></div>
         <div className="model-area-wrap">
           <table className="model-area-table">
-            <thead><tr><th>Shop / Area</th><th className={`all-model-column ${modelAreaMatrix.activeSort === "ALL" ? "sorted" : ""}`}><button onClick={() => setMatrixSortBrand("ALL")}><strong>ALL MODEL</strong><small>รวมทุก Brand/รุ่น</small></button></th>{modelAreaMatrix.topBrands.map((brand) => <th className={`${selectedBrand === brand ? "selected-brand-column" : ""} ${modelAreaMatrix.activeSort === brand ? "sorted" : ""}`} key={brand}><button onClick={() => setMatrixSortBrand(brand)}><strong>{brand}</strong><small>คลิกเพื่อเรียง</small></button></th>)}</tr></thead>
+            <thead><tr><th>Shop / Area</th><th className={`all-model-column ${modelAreaMatrix.activeSort === "ALL" ? "sorted" : ""}`}><button onClick={() => setMatrixSortBrand("ALL")}><strong>ALL MODEL</strong><small>รวมทุก Brand/รุ่น</small></button></th>{modelAreaMatrix.topBrands.map((brand) => <th className={`brand-column-header ${selectedBrand === brand ? "selected-brand-column" : ""} ${modelAreaMatrix.activeSort === brand ? "sorted" : ""}`} style={{ "--brand": brandColors[brand] ?? "#64748b" } as React.CSSProperties} key={brand}><button onClick={() => setMatrixSortBrand(brand)}><strong>{brand}</strong><small>คลิกเพื่อเรียง</small></button></th>)}</tr></thead>
             <tbody>
               <tr className="all-shop-row"><th><strong>ALL Shop</strong><small>ผลรวมทุกสาขา · ไม่จัดอันดับ</small></th><td>{matrixCell(modelAreaMatrix.allShop.all, undefined, true)}</td>{modelAreaMatrix.topBrands.map((brand) => <td className={selectedBrand === brand ? "selected-brand-column" : ""} key={brand}>{matrixCell(modelAreaMatrix.allShop.brands[brand], undefined, true)}</td>)}</tr>
               {modelAreaMatrix.shopRows.map((row) => <tr key={row.code}><th><strong>{row.shop}</strong><small>{row.code}{row.all.monthlyTarget <= 0 && row.all.mtdActual > 0 ? " · No Target" : ""}</small></th><td className="all-model-column">{matrixCell(row.all, modelAreaMatrix.ranks.get(`ALL|${row.code}`))}</td>{modelAreaMatrix.topBrands.map((brand) => <td className={selectedBrand === brand ? "selected-brand-column" : ""} key={brand}>{matrixCell(row.brands[brand], modelAreaMatrix.ranks.get(`${brand}|${row.code}`))}</td>)}</tr>)}
