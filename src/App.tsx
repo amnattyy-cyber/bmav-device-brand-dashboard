@@ -222,8 +222,8 @@ export default function Home() {
     const rows = data.shops.filter((shop) => shop.brand === brand.brand && (selectedShops.length === 0 || selectedShops.includes(shop.code)));
     const row: DataRow = combineRows(rows);
     const view = getViewMetrics(row);
-    return { ...brand, viewTarget: view.target, viewActual: view.actual, viewPrevious: view.previous, viewAchievement: view.achievement };
-  }).filter((row) => row.viewTarget > 0), [data.brands, data.shops, getViewMetrics, selectedShops]);
+    return { ...brand, viewTarget: view.target, viewActual: view.actual, viewPrevious: view.previous, viewAchievement: view.achievement, hasTarget: view.monthlyTarget > 0, hasSales: view.mtdActual > 0 };
+  }).filter((row) => row.hasTarget || row.hasSales), [data.brands, data.shops, getViewMetrics, selectedShops]);
 
   const shopViews = useMemo(() => {
     const rows: DataRow[] = selectedBrand === "ALL"
