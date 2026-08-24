@@ -9,7 +9,7 @@ Public interactive dashboard for BMA V - Central device performance in August 20
 - Selectable sales date
 - Daily and month-to-date (MTD) views
 - KPI, brand performance, shop ranking, and daily trend updates from the same filters
-- Week-on-week analysis across the fixed August periods (3–9, 10–16, 17–23, and 24–30), defaulting to the period that contains the latest live date
+- Week-on-week analysis across Week 32–36 (3 August–6 September), defaulting to the period that contains the latest live date
 - Net Amount and QTY deltas, WoW percentages, brand/shop drivers, average selling value, shop contribution signals, and a targeted action summary
 - Per-brand WoW badges alongside the existing MoM badges, responsive to the selected week, metric, and shop filter
 - Model x Area ranking matrix with the top 12 brands, Daily/MTD/Run Rate values, projected run-rate achievement, per-brand shop ranks, an unranked ALL Shop total, and a compact Capture View
@@ -20,7 +20,7 @@ Public interactive dashboard for BMA V - Central device performance in August 20
 
 ## Week-on-week comparison
 
-The active period is compared on an equal-day basis with the immediately preceding period. For 3–9 August, the comparison starts on 27 July and continues through 2 August when all seven days are available. An in-progress period only includes dates available through the latest live sales date, so a partial week is never compared with more elapsed days than it contains.
+The active period is compared on an equal-day basis with the immediately preceding calendar week. For 3–9 August, the comparison starts on 27 July and continues through 2 August when all seven days are available. An in-progress period only includes dates available through the latest live sales date, so a partial week is never compared with more elapsed days than it contains. Week 36 spans 31 August–6 September and continues to work across the month boundary because the dashboard retains date-keyed live sales rows. A missing comparison base is shown as a neutral gray badge instead of a growth percentage.
 
 ## GitHub Pages
 
@@ -37,4 +37,5 @@ npm run dev
 
 ```text
 npm run build
+npm test
 ```
