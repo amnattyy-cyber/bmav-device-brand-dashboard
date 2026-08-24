@@ -84,6 +84,7 @@ h1 span { color: var(--purple); }
 .wow-kpis article { min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 17px; background: white; box-shadow: 0 10px 25px rgba(30,41,59,.05); }
 .wow-kpis article > span, .wow-kpis small { display: block; color: var(--muted); font-size: 10px; }.wow-kpis article > span { font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
 .wow-kpis strong { display: block; overflow: hidden; margin: 9px 0 4px; font: 800 clamp(20px, 2vw, 27px) Arial; letter-spacing: -.035em; text-overflow: ellipsis; white-space: nowrap; }.wow-kpis em { display: inline-block; margin-top: 11px; padding: 4px 7px; border-radius: 7px; font-size: 10px; font-style: normal; font-weight: 900; }
+.wow-kpis .shop-signal-name { overflow: visible; font-size: clamp(13px, 1.35vw, 17px); line-height: 1.15; text-overflow: clip; white-space: normal; }
 .positive { color: #15803d !important; }.negative { color: #dc2626 !important; }.neutral { color: #64748b !important; }.wow-kpis em.positive { background: #dcfce7; }.wow-kpis em.negative { background: #fee2e2; }.wow-kpis em.neutral { background: #eef1f6; }
 .wow-analysis-grid { display: grid; grid-template-columns: 1fr 1fr .9fr; gap: 11px; margin-top: 11px; }
 .driver-panel, .action-panel { padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: white; }
