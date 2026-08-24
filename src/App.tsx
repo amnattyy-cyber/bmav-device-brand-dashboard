@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DataRow } from "./google-sheet-data";
+import { fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DailySale, type DataRow } from "./google-sheet-data";
+import { comparableWeekPeriod, shortDateRange, weekDataStatus, weekIndexForDate, weekRanges, wowChangeRate } from "./wow-periods";
 
 type Metric = "net" | "qty";
 type ViewMode = "day" | "mtd" | "achieve" | "runrate";
 type MatrixRanking = "rank" | "achieve" | "runrate";
 type SourceStatus = "loading" | "live" | "fallback";
-type WeekRange = { start: number; end: number; label: string };
 type WeekSnapshot = { net: number; qty: number };
 type ViewMetrics = {
   monthlyTarget: number;
@@ -32,46 +32,15 @@ const compactChart = (value: number) => value >= 1_000_000
     ? `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1)}K`
     : integer.format(value);
 const sumTo = (values: number[], day: number) => values.slice(0, day).reduce((sum, value) => sum + value, 0);
-const weekRanges: WeekRange[] = [
-  { start: 3, end: 9, label: "3–9 Aug" },
-  { start: 10, end: 16, label: "10–16 Aug" },
-  { start: 17, end: 23, label: "17–23 Aug" },
-  { start: 24, end: 30, label: "24–30 Aug" },
-];
-const weekIndexForDay = (day: number) => {
-  const index = weekRanges.findIndex((range) => day >= range.start && day <= range.end);
-  return index >= 0 ? index : day < weekRanges[0].start ? 0 : weekRanges.length - 1;
-};
-const rangeSum = (values: number[] | undefined, start: number, end: number) => (values ?? []).slice(start - 1, end).reduce((sum, value) => sum + value, 0);
-const previousWeekSnapshot = (row: DataRow, range: WeekRange, currentDays: number, previousMonthDays: number): WeekSnapshot => {
-  if (!currentDays) return { net: 0, qty: 0 };
-  const start = range.start - 7;
-  const end = start + currentDays - 1;
-  const sumMetric = (current: number[] | undefined, previous: number[] | undefined) => {
-    const previousMonthValue = start <= 0
-      ? rangeSum(previous, previousMonthDays + start, previousMonthDays + Math.min(end, 0))
-      : 0;
-    const currentMonthValue = end >= 1 ? rangeSum(current, Math.max(start, 1), end) : 0;
-    return previousMonthValue + currentMonthValue;
-  };
-  return {
-    net: sumMetric(row.dailyNet, row.previousDailyNet),
-    qty: sumMetric(row.dailyQty, row.previousDailyQty),
-  };
-};
-const previousWeekLabel = (range: WeekRange, currentDays: number, previousMonthDays: number) => {
-  const start = range.start - 7;
-  const end = start + currentDays - 1;
-  if (start <= 0) {
-    const previousStart = previousMonthDays + start;
-    return end <= 0
-      ? `${previousStart}–${previousMonthDays + end} Jul`
-      : `${previousStart} Jul–${end} Aug`;
-  }
-  return `${start}–${end} Aug`;
-};
-const changeRate = (current: number, previous: number) => previous ? ((current - previous) / previous) * 100 : current ? 100 : 0;
 const signed = (value: number, digits = 1) => `${value > 0 ? "+" : ""}${value.toFixed(digits)}%`;
+const wowRateLabel = (value: number | null) => value == null ? "—" : signed(value);
+const wowRateTone = (value: number | null) => value == null ? "neutral" : value >= 0 ? "positive" : "negative";
+const salesSnapshot = (sales: DailySale[], start: string, end: string | null): WeekSnapshot => {
+  if (!end) return { net: 0, qty: 0 };
+  return sales.reduce((total, sale) => sale.date >= start && sale.date <= end
+    ? { net: total.net + sale.net, qty: total.qty + sale.qty }
+    : total, { net: 0, qty: 0 });
+};
 
 const emptyRow = (): DataRow => ({ targetQty: 0, targetNet: 0, dailyQty: Array(31).fill(0), dailyNet: Array(31).fill(0), previousDailyQty: Array(31).fill(0), previousDailyNet: Array(31).fill(0) });
 const combineRows = (rows: DataRow[]): DataRow => rows.reduce((total, row) => ({
@@ -110,11 +79,11 @@ export default function Home() {
   const [selectedBrand, setSelectedBrand] = useState("ALL");
   const [selectedShops, setSelectedShops] = useState<string[]>([]);
   const [selectedDay, setSelectedDay] = useState(Number(fallbackData.latest.slice(-2)));
-  const [selectedWeek, setSelectedWeek] = useState(weekIndexForDay(Number(fallbackData.latest.slice(-2))));
+  const [selectedWeek, setSelectedWeek] = useState(weekIndexForDate(fallbackData.latest));
   const [matrixRanking, setMatrixRanking] = useState<MatrixRanking>("rank");
   const [matrixSortBrand, setMatrixSortBrand] = useState("ALL");
   const [matrixCapture, setMatrixCapture] = useState(false);
-  const previousLatestDay = useRef(Number(fallbackData.latest.slice(-2)));
+  const previousLatestDate = useRef(fallbackData.latest);
   const latestDay = Number(data.latest.slice(-2));
   const monthPrefix = data.latest.slice(0, 7);
   const [yearNumber, monthNumber] = monthPrefix.split("-").map(Number);
@@ -142,11 +111,12 @@ export default function Home() {
   }, [refreshData]);
 
   useEffect(() => {
-    const priorLatestDay = previousLatestDay.current;
+    const priorLatestDate = previousLatestDate.current;
+    const priorLatestDay = Number(priorLatestDate.slice(-2));
     setSelectedDay((current) => current === priorLatestDay ? latestDay : Math.min(current, latestDay));
-    setSelectedWeek((current) => current === weekIndexForDay(priorLatestDay) ? weekIndexForDay(latestDay) : current);
-    previousLatestDay.current = latestDay;
-  }, [latestDay]);
+    setSelectedWeek((current) => current === weekIndexForDate(priorLatestDate) ? weekIndexForDate(data.latest) : current);
+    previousLatestDate.current = data.latest;
+  }, [data.latest, latestDay]);
 
   useEffect(() => {
     if (!matrixCapture) return;
@@ -255,90 +225,70 @@ export default function Home() {
 
   const wow = useMemo(() => {
     const range = weekRanges[selectedWeek];
-    const currentEnd = Math.min(range.end, latestDay);
-    const currentDays = Math.max(0, currentEnd - range.start + 1);
-    const snapshot = (row: DataRow, previous = false): WeekSnapshot => {
-      if (!currentDays) return { net: 0, qty: 0 };
-      if (previous) return previousWeekSnapshot(row, range, currentDays, previousMonthDays);
-      const start = range.start;
-      return {
-        net: rangeSum(row.dailyNet, start, start + currentDays - 1),
-        qty: rangeSum(row.dailyQty, start, start + currentDays - 1),
-      };
-    };
-    const rows = data.shops.filter((row) => (selectedBrand === "ALL" || row.brand === selectedBrand) && (selectedShops.length === 0 || selectedShops.includes(row.code)));
-    const current = snapshot(combineRows(rows));
-    const previous = snapshot(combineRows(rows), true);
-    const overallCurrentNet = snapshot(combineRows(data.shops)).net;
-    const overallPreviousNet = snapshot(combineRows(data.shops), true).net;
-    const decorate = (name: string, row: DataRow) => {
-      const now = snapshot(row);
-      const before = snapshot(row, true);
+    const period = comparableWeekPeriod(range, data.latest);
+    const snapshot = (rows: DailySale[], previous = false) => previous
+      ? salesSnapshot(rows, period.baseStart, period.baseEnd)
+      : salesSnapshot(rows, period.currentStart, period.currentEnd);
+    const rows = data.sales.filter((sale) => (selectedBrand === "ALL" || sale.brand === selectedBrand) && (selectedShops.length === 0 || selectedShops.includes(sale.code)));
+    const overallRows = data.sales.filter((sale) => selectedShops.length === 0 || selectedShops.includes(sale.code));
+    const current = snapshot(rows);
+    const previous = snapshot(rows, true);
+    const overallCurrentNet = snapshot(overallRows).net;
+    const overallPreviousNet = snapshot(overallRows, true).net;
+    const decorate = (name: string, scopedSales: DailySale[]) => {
+      const now = snapshot(scopedSales);
+      const before = snapshot(scopedSales, true);
       const currentShare = overallCurrentNet ? (now.net / overallCurrentNet) * 100 : 0;
       const previousShare = overallPreviousNet ? (before.net / overallPreviousNet) * 100 : 0;
       return { name, current: now, previous: before, deltaNet: now.net - before.net, deltaQty: now.qty - before.qty, currentShare, shareDelta: currentShare - previousShare };
     };
-    const brandDrivers = [...new Set(rows.map((row) => row.brand))].map((brand) => decorate(brand, combineRows(rows.filter((row) => row.brand === brand)))).sort((a, b) => b.deltaNet - a.deltaNet);
-    const shopDrivers = [...new Set(rows.map((row) => row.code))].map((code) => {
-      const items = rows.filter((row) => row.code === code);
-      return decorate(items[0]?.shop ?? code, combineRows(items));
+    const brandDrivers = [...new Set(rows.map((sale) => sale.brand))].map((brand) => decorate(brand, rows.filter((sale) => sale.brand === brand))).sort((a, b) => b.deltaNet - a.deltaNet);
+    const shopDrivers = [...new Set(rows.map((sale) => sale.code))].map((code) => {
+      const items = rows.filter((sale) => sale.code === code);
+      return decorate(items[0]?.shop ?? code, items);
     }).sort((a, b) => b.deltaNet - a.deltaNet);
-    const netRate = changeRate(current.net, previous.net);
-    const qtyRate = changeRate(current.qty, previous.qty);
+    const netRate = wowChangeRate(current.net, previous.net);
+    const qtyRate = wowChangeRate(current.qty, previous.qty);
     const currentAsp = current.qty ? current.net / current.qty : 0;
     const previousAsp = previous.qty ? previous.net / previous.qty : 0;
-    const aspRate = changeRate(currentAsp, previousAsp);
-    const leadBrand = netRate >= 0 ? brandDrivers[0] : brandDrivers.at(-1);
-    const leadShop = netRate >= 0 ? shopDrivers[0] : shopDrivers.at(-1);
-    const direction = netRate >= 0 ? "เติบโต" : "ชะลอ";
-    const cause = Math.abs(qtyRate) >= Math.abs(aspRate) ? `QTY ${signed(qtyRate)} เป็นสัญญาณหลัก` : `มูลค่าต่อเครื่อง ${signed(aspRate)} เป็นสัญญาณหลัก`;
-    const action = netRate < 0
-      ? `เร่งกู้ยอดที่ ${leadShop?.name ?? "สาขาที่ติดลบ"} โดยโฟกัส ${leadBrand?.name ?? "Brand ที่ลดลง"}; ${qtyRate < 0 ? "เพิ่ม conversion และ stock รุ่นขายดี" : "ดัน mix รุ่นมูลค่าสูงและ attach offer"}`
+    const aspRate = wowChangeRate(currentAsp, previousAsp);
+    const leadBrand = netRate == null || netRate >= 0 ? brandDrivers[0] : brandDrivers.at(-1);
+    const leadShop = netRate == null || netRate >= 0 ? shopDrivers[0] : shopDrivers.at(-1);
+    const direction = netRate == null ? "ไม่มีฐานเปรียบเทียบ" : netRate >= 0 ? "เติบโต" : "ชะลอ";
+    const cause = netRate == null || qtyRate == null || aspRate == null
+      ? "ฐานเปรียบเทียบยังไม่เพียงพอสำหรับคำนวณอัตรา WoW"
+      : Math.abs(qtyRate) >= Math.abs(aspRate) ? `QTY ${signed(qtyRate)} เป็นสัญญาณหลัก` : `มูลค่าต่อเครื่อง ${signed(aspRate)} เป็นสัญญาณหลัก`;
+    const action = netRate == null
+      ? "ตรวจความครบถ้วนของข้อมูลฐานก่อนสรุปแนวโน้ม และใช้ยอดจริงเป็นข้อมูลตั้งต้น"
+      : netRate < 0
+      ? `เร่งกู้ยอดที่ ${leadShop?.name ?? "สาขาที่ติดลบ"} โดยโฟกัส ${leadBrand?.name ?? "Brand ที่ลดลง"}; ${(qtyRate ?? 0) < 0 ? "เพิ่ม conversion และ stock รุ่นขายดี" : "ดัน mix รุ่นมูลค่าสูงและ attach offer"}`
       : `รักษาแรงส่ง ${leadBrand?.name ?? "Brand นำ"} ที่ ${leadShop?.name ?? "สาขานำ"} และถอด playbook ไปยังสาขาที่ contribution ลดลง`;
-    const previousLabel = previousWeekLabel(range, currentDays, previousMonthDays);
-    return { range, currentEnd, currentDays, current, previous, netRate, qtyRate, currentAsp, previousAsp, aspRate, brandDrivers, shopDrivers, leadBrand, leadShop, direction, cause, action, previousLabel };
-  }, [data.shops, latestDay, previousMonthDays, selectedBrand, selectedShops, selectedWeek]);
+    return { range, period, current, previous, netRate, qtyRate, currentAsp, previousAsp, aspRate, brandDrivers, shopDrivers, leadBrand, leadShop, direction, cause, action };
+  }, [data.latest, data.sales, selectedBrand, selectedShops, selectedWeek]);
 
   const brandWow = useMemo(() => {
     const range = weekRanges[selectedWeek];
-    const currentEnd = Math.min(range.end, latestDay);
-    const currentDays = Math.max(0, currentEnd - range.start + 1);
-    const snapshot = (row: DataRow, previous = false): WeekSnapshot => {
-      if (!currentDays) return { net: 0, qty: 0 };
-      if (previous) return previousWeekSnapshot(row, range, currentDays, previousMonthDays);
-      const start = range.start;
-      return {
-        net: rangeSum(row.dailyNet, start, start + currentDays - 1),
-        qty: rangeSum(row.dailyQty, start, start + currentDays - 1),
-      };
-    };
+    const period = comparableWeekPeriod(range, data.latest);
 
     return new Map(data.brands.map(({ brand }) => {
-      const rows = data.shops.filter((shop) => shop.brand === brand && (selectedShops.length === 0 || selectedShops.includes(shop.code)));
-      const row = combineRows(rows);
-      const current = snapshot(row)[metric];
-      const previous = snapshot(row, true)[metric];
-      return [brand, { current, previous, rate: previous > 0 ? changeRate(current, previous) : null }] as const;
+      const rows = data.sales.filter((sale) => sale.brand === brand && (selectedShops.length === 0 || selectedShops.includes(sale.code)));
+      const current = salesSnapshot(rows, period.currentStart, period.currentEnd)[metric];
+      const previous = salesSnapshot(rows, period.baseStart, period.baseEnd)[metric];
+      return [brand, { current, previous, rate: wowChangeRate(current, previous) }] as const;
     }));
-  }, [data.brands, data.shops, latestDay, metric, previousMonthDays, selectedShops, selectedWeek]);
+  }, [data.brands, data.latest, data.sales, metric, selectedShops, selectedWeek]);
 
   const shopWow = useMemo(() => {
     const range = weekRanges[selectedWeek];
-    const currentEnd = Math.min(range.end, latestDay);
-    const currentDays = Math.max(0, currentEnd - range.start + 1);
-    const valueFor = (row: DataRow, previous = false) => {
-      if (!currentDays) return 0;
-      if (previous) return previousWeekSnapshot(row, range, currentDays, previousMonthDays)[metric];
-      const values = metric === "net" ? row.dailyNet : row.dailyQty;
-      return rangeSum(values, range.start, range.start + currentDays - 1);
-    };
+    const period = comparableWeekPeriod(range, data.latest);
 
     return new Map(shopViews.map((shop) => {
-      const current = valueFor(shop);
-      const previous = valueFor(shop, true);
-      return [String(shop.code), { current, previous, rate: previous ? changeRate(current, previous) : null }] as const;
+      const rows = data.sales.filter((sale) => sale.code === String(shop.code) && (selectedBrand === "ALL" || sale.brand === selectedBrand));
+      const current = salesSnapshot(rows, period.currentStart, period.currentEnd)[metric];
+      const previous = salesSnapshot(rows, period.baseStart, period.baseEnd)[metric];
+      return [String(shop.code), { current, previous, rate: wowChangeRate(current, previous) }] as const;
     }));
-  }, [latestDay, metric, previousMonthDays, selectedWeek, shopViews]);
+  }, [data.latest, data.sales, metric, selectedBrand, selectedWeek, shopViews]);
 
   const brandWowChart = useMemo(() => {
     const rows = data.brands.map(({ brand }) => {
@@ -348,6 +298,9 @@ export default function Home() {
     const maxMagnitude = Math.max(...rows.map((item) => Math.abs(item.rate ?? 0)), 1);
     return { rows: rows.sort((a, b) => (b.rate ?? 0) - (a.rate ?? 0)), maxMagnitude };
   }, [brandWow, data.brands]);
+
+  const activeWowRate = metric === "net" ? wow.netRate : wow.qtyRate;
+  const activeWowTone = activeWowRate == null ? "neutral" : activeWowRate >= 0 ? "up" : "down";
 
   const modelAreaMatrix = useMemo(() => {
     const scopedRows = data.shops.filter((row) => selectedShops.length === 0 || selectedShops.includes(row.code));
@@ -473,21 +426,24 @@ export default function Home() {
       <section className="context-line shell"><span>{metricLabel}</span><b>{selectedBrand === "ALL" ? "ALL BRANDS" : selectedBrand}</b><b>{shopName}</b><b>{modeCopy.title} ณ {thaiDate(selectedDay)}</b></section>
 
       <section className="section wow-section shell" aria-labelledby="wow-title">
-        <div className="section-heading wow-heading"><div><span className="section-number">WOW</span><h2 id="wow-title">Week on Week by Brand</h2><p>เทียบช่วงวันเท่ากัน • Net Amount, QTY, drivers และสัญญาณเชิงพาณิชย์</p></div><span className={`wow-status ${wow.netRate >= 0 ? "up" : "down"}`}>{wow.direction} {signed(wow.netRate)}</span></div>
+        <div className="section-heading wow-heading"><div><span className="section-number">WOW</span><h2 id="wow-title">Performance WoW</h2><p>{wow.range.id}: {shortDateRange(wow.period.currentStart, wow.period.currentEnd)} • เทียบฐาน {shortDateRange(wow.period.baseStart, wow.period.baseEnd)} • {weekDataStatus(wow.period)}</p></div><span className={`wow-status ${activeWowTone}`}>WoW {metric === "net" ? "Net" : "Qty"} {wowRateLabel(activeWowRate)}</span></div>
         <div className="week-picker" role="group" aria-label="เลือกช่วง Week on Week">
-          {weekRanges.map((range, index) => <button key={range.label} className={selectedWeek === index ? "selected" : ""} onClick={() => setSelectedWeek(index)} disabled={range.start > latestDay}><span>{range.label}</span><small>{range.start > latestDay ? "ยังไม่มีข้อมูล" : index === weekIndexForDay(latestDay) && latestDay < range.end ? `ถึง ${latestDay} Aug` : "พร้อมวิเคราะห์"}</small></button>)}
+          {weekRanges.map((range, index) => {
+            const period = comparableWeekPeriod(range, data.latest);
+            return <button key={range.id} className={selectedWeek === index ? "selected" : ""} onClick={() => setSelectedWeek(index)} disabled={period.currentDays === 0}><span>{range.id}</span><small>{range.label}</small><em>{weekDataStatus(period)}</em></button>;
+          })}
         </div>
-        <div className="wow-context"><b>{wow.range.label}{wow.currentEnd < wow.range.end ? ` (ข้อมูลถึง ${wow.currentEnd} Aug)` : ""}</b><span>เทียบ {wow.previousLabel}</span><span>{selectedBrand === "ALL" ? "ทุก Brand" : selectedBrand} • {shopName}</span></div>
+        <div className="wow-context"><b>ช่วงปัจจุบัน {shortDateRange(wow.period.currentStart, wow.period.currentEnd)}</b><span>ฐานเปรียบเทียบ {shortDateRange(wow.period.baseStart, wow.period.baseEnd)}</span><span>จำนวนวันเท่ากัน {wow.period.currentDays} วัน</span><span>{selectedBrand === "ALL" ? "ทุก Brand" : selectedBrand} • {shopName}</span></div>
         <div className="wow-kpis">
-          <article><span>Net Amount</span><strong>฿{integer.format(wow.current.net)}</strong><small>สัปดาห์ก่อน ฿{integer.format(wow.previous.net)}</small><em className={wow.current.net >= wow.previous.net ? "positive" : "negative"}>{wow.current.net - wow.previous.net >= 0 ? "+" : ""}฿{integer.format(wow.current.net - wow.previous.net)} • {signed(wow.netRate)}</em></article>
-          <article><span>QTY</span><strong>{integer.format(wow.current.qty)} เครื่อง</strong><small>สัปดาห์ก่อน {integer.format(wow.previous.qty)} เครื่อง</small><em className={wow.current.qty >= wow.previous.qty ? "positive" : "negative"}>{wow.current.qty - wow.previous.qty >= 0 ? "+" : ""}{integer.format(wow.current.qty - wow.previous.qty)} • {signed(wow.qtyRate)}</em></article>
-          <article><span>มูลค่าต่อเครื่อง</span><strong>฿{integer.format(wow.currentAsp)}</strong><small>สัปดาห์ก่อน ฿{integer.format(wow.previousAsp)}</small><em className={wow.currentAsp >= wow.previousAsp ? "positive" : "negative"}>{signed(wow.aspRate)} WoW</em></article>
-          <article><span>Shop contribution signal</span><strong>{wow.leadShop?.name ?? "—"}</strong><small>{wow.netRate >= 0 ? "สาขาผลักดันหลัก" : "สาขาตัวฉุดหลัก"}</small><em className={(wow.leadShop?.shareDelta ?? 0) >= 0 ? "positive" : "negative"}>{signed(wow.leadShop?.shareDelta ?? 0)} pts share</em></article>
+          <article><span>Net Amount</span><strong>฿{integer.format(wow.current.net)}</strong><small>สัปดาห์ก่อน ฿{integer.format(wow.previous.net)}</small><em className={wowRateTone(wow.netRate)}>{wow.current.net - wow.previous.net >= 0 ? "+" : ""}฿{integer.format(wow.current.net - wow.previous.net)} • {wowRateLabel(wow.netRate)}</em></article>
+          <article><span>QTY</span><strong>{integer.format(wow.current.qty)} เครื่อง</strong><small>สัปดาห์ก่อน {integer.format(wow.previous.qty)} เครื่อง</small><em className={wowRateTone(wow.qtyRate)}>{wow.current.qty - wow.previous.qty >= 0 ? "+" : ""}{integer.format(wow.current.qty - wow.previous.qty)} • {wowRateLabel(wow.qtyRate)}</em></article>
+          <article><span>มูลค่าต่อเครื่อง</span><strong>฿{integer.format(wow.currentAsp)}</strong><small>สัปดาห์ก่อน ฿{integer.format(wow.previousAsp)}</small><em className={wowRateTone(wow.aspRate)}>{wowRateLabel(wow.aspRate)} WoW</em></article>
+          <article><span>Shop contribution signal</span><strong>{wow.leadShop?.name ?? "—"}</strong><small>{wow.netRate == null ? "รอฐานเปรียบเทียบ" : wow.netRate >= 0 ? "สาขาผลักดันหลัก" : "สาขาตัวฉุดหลัก"}</small><em className={(wow.leadShop?.shareDelta ?? 0) >= 0 ? "positive" : "negative"}>{signed(wow.leadShop?.shareDelta ?? 0)} pts share</em></article>
         </div>
         <div className="wow-analysis-grid">
           <article className="driver-panel"><header><div><span>BRAND DRIVER</span><h3>ตัวผลักดัน / ตัวฉุด</h3></div><small>Δ Net Amount</small></header><div className="driver-list">{[...wow.brandDrivers.slice(0, 2), ...wow.brandDrivers.slice(-2).reverse().filter((driver) => !wow.brandDrivers.slice(0, 2).includes(driver))].map((driver) => <div key={driver.name}><b>{driver.name}</b><span className={driver.deltaNet >= 0 ? "positive" : "negative"}>{driver.deltaNet >= 0 ? "+" : ""}฿{compactChart(driver.deltaNet)}</span><small>QTY {driver.deltaQty >= 0 ? "+" : ""}{integer.format(driver.deltaQty)} • Share {signed(driver.shareDelta)} pts</small></div>)}</div></article>
           <article className="driver-panel"><header><div><span>SHOP DRIVER</span><h3>สาขาที่ต้องจับตา</h3></div><small>Δ Net Amount</small></header><div className="driver-list">{wow.shopDrivers.slice(0, 2).map((driver) => <div key={driver.name}><b>{driver.name}</b><span className={driver.deltaNet >= 0 ? "positive" : "negative"}>{driver.deltaNet >= 0 ? "+" : ""}฿{compactChart(driver.deltaNet)}</span><small>QTY {driver.deltaQty >= 0 ? "+" : ""}{integer.format(driver.deltaQty)} • Share {signed(driver.shareDelta)} pts</small></div>)}{wow.shopDrivers.slice(-2).reverse().filter((driver) => !wow.shopDrivers.slice(0, 2).includes(driver)).map((driver) => <div key={driver.name}><b>{driver.name}</b><span className={driver.deltaNet >= 0 ? "positive" : "negative"}>{driver.deltaNet >= 0 ? "+" : ""}฿{compactChart(driver.deltaNet)}</span><small>QTY {driver.deltaQty >= 0 ? "+" : ""}{integer.format(driver.deltaQty)} • Share {signed(driver.shareDelta)} pts</small></div>)}</div></article>
-          <aside className="action-panel"><span>INSIGHT → ACTION</span><h3>สัปดาห์นี้ยอด{wow.direction}</h3><p><b>สัญญาณ:</b> {wow.cause} ขณะที่ Shop contribution ของ {wow.leadShop?.name ?? "สาขาหลัก"} เปลี่ยน {signed(wow.leadShop?.shareDelta ?? 0)} pts</p><div><small>ACTION ชี้เป้า</small><strong>{wow.action}</strong></div></aside>
+          <aside className="action-panel"><span>INSIGHT → ACTION</span><h3>สัปดาห์นี้: {wow.direction}</h3><p><b>สัญญาณ:</b> {wow.cause} ขณะที่ Shop contribution ของ {wow.leadShop?.name ?? "สาขาหลัก"} เปลี่ยน {signed(wow.leadShop?.shareDelta ?? 0)} pts</p><div><small>ACTION ชี้เป้า</small><strong>{wow.action}</strong></div></aside>
         </div>
       </section>
 
@@ -499,7 +455,7 @@ export default function Home() {
       </section>
 
       <section className="section shell">
-        <div className="section-heading"><div><span className="section-number">01</span><h2>Performance by Brand</h2><p>{metricLabel} • {modeCopy.title} • {shopName} • MoM vs Jul<br /><span className="brand-wow-context">WoW {wow.range.label}{wow.currentEnd < wow.range.end ? ` (ข้อมูลถึง ${wow.currentEnd} Aug)` : ""} เทียบ {wow.previousLabel} • จำนวนวันเท่ากัน</span></p></div><div className="legend"><i className="target" /> {modeCopy.target} <i className="actual" /> {modeCopy.actual}</div></div>
+        <div className="section-heading"><div><span className="section-number">01</span><h2>Performance by Brand</h2><p>{metricLabel} • {modeCopy.title} • {shopName} • MoM vs Jul<br /><span className="brand-wow-context">{wow.range.id}: {shortDateRange(wow.period.currentStart, wow.period.currentEnd)} เทียบ {shortDateRange(wow.period.baseStart, wow.period.baseEnd)} • จำนวนวันเท่ากัน {wow.period.currentDays} วัน</span></p></div><div className="legend"><i className="target" /> {modeCopy.target} <i className="actual" /> {modeCopy.actual}</div></div>
         <div className="brand-grid">
           {brandViews.map((item) => {
             const color = brandColors[item.brand] ?? "#64748b";
@@ -547,28 +503,27 @@ export default function Home() {
       <section className="section shop-performance-section shell">
         <div className="section-heading shop-heading"><div><span className="section-number">04</span><h2>Shop Performance</h2><p>{selectedBrand === "ALL" ? "สาขาที่มี Target หรือยอดขายใน BMAV" : `สาขาที่มี Target หรือยอดขาย ${selectedBrand}`} • {modeCopy.title} • MoM เทียบ Jul</p></div><span className="shop-count">{shopViews.length} สาขา</span></div>
         <section className="wow-brand-chart" aria-labelledby="brand-wow-chart-title">
-          <header><div><span>WEEK COMPARISON</span><h3 id="brand-wow-chart-title">%WoW by Brand</h3></div><p>{metricLabel} • {wow.range.label} เทียบ {wow.previousLabel} • จำนวนวันเท่ากัน</p></header>
+          <header><div><span>WEEK COMPARISON</span><h3 id="brand-wow-chart-title">%WoW by Brand</h3></div><p>{metricLabel} • {wow.range.id} {shortDateRange(wow.period.currentStart, wow.period.currentEnd)}<br />เทียบฐาน {shortDateRange(wow.period.baseStart, wow.period.baseEnd)} • {wow.period.currentDays} วันเท่ากัน</p></header>
           <div className="diverging-chart" role="img" aria-label={`กราฟเปอร์เซ็นต์ Week on Week แยกตาม Brand สำหรับ ${metricLabel}`}>
             <div className="chart-side-labels"><span>ลดลง</span><b>0%</b><span>เติบโต</span></div>
             {brandWowChart.rows.map((item) => {
-              const isNew = item.previous === 0 && item.current > 0;
+              const hasBase = item.rate != null;
               const rate = item.rate ?? 0;
-              const width = isNew ? 100 : Math.max(rate === 0 ? 0 : 2, (Math.abs(rate) / brandWowChart.maxMagnitude) * 100);
+              const width = hasBase ? Math.max(rate === 0 ? 0 : 2, (Math.abs(rate) / brandWowChart.maxMagnitude) * 100) : 0;
               return <div className={`diverging-row ${selectedBrand === item.brand ? "highlight" : ""}`} key={item.brand}>
                 <strong>{item.brand}</strong><div className="diverging-track"><i className="zero-line" />
-                  <span className={rate < 0 ? "bar-negative" : "bar-positive"} style={{ width: `${width / 2}%`, [rate < 0 ? "right" : "left"]: "50%" }} />
-                  <em className={rate < 0 ? "value-negative" : "value-positive"} style={{ [rate < 0 ? "right" : "left"]: `calc(50% + ${width / 2}% + 7px)` }}>{isNew ? "NEW" : signed(rate)}</em>
+                  <span className={!hasBase ? "bar-neutral" : rate < 0 ? "bar-negative" : "bar-positive"} style={{ width: `${width / 2}%`, [rate < 0 ? "right" : "left"]: "50%" }} />
+                  <em className={!hasBase ? "value-neutral" : rate < 0 ? "value-negative" : "value-positive"} style={!hasBase ? { left: "calc(50% + 7px)" } : { [rate < 0 ? "right" : "left"]: `calc(50% + ${width / 2}% + 7px)` }}>{hasBase ? signed(rate) : "—"}</em>
                 </div>
               </div>;
             })}
           </div>
         </section>
-        <div className="shop-table-wrap"><table><thead><tr><th>อันดับ</th><th>สาขา</th><th>Target</th><th>{modeCopy.actual}</th><th>MoM</th><th>%WoW</th><th>Achievement</th><th>Gap</th></tr></thead><tbody>
+        <div className="shop-table-wrap"><table><thead><tr><th>อันดับ</th><th>สาขา</th><th>Target</th><th>{modeCopy.actual}</th><th>MoM</th><th>WoW {metric === "net" ? "Net" : "Qty"}</th><th>Achievement</th><th>Gap</th></tr></thead><tbody>
           {shopViews.map((shop, index) => {
             const weekly = shopWow.get(String(shop.code));
-            const isNew = weekly?.previous === 0 && (weekly?.current ?? 0) > 0;
-            const wowLabel = isNew ? "NEW" : weekly?.rate == null ? "—" : signed(weekly.rate);
-            const wowTone = isNew ? "mom-new" : weekly?.rate == null ? "mom-neutral" : weekly.rate >= 0 ? "mom-up" : "mom-down";
+            const wowLabel = weekly?.rate == null ? "—" : signed(weekly.rate);
+            const wowTone = weekly?.rate == null ? "mom-neutral" : weekly.rate >= 0 ? "mom-up" : "mom-down";
             return <tr key={shop.code}><td><span className={`rank ${index < 3 ? "top" : ""}`}>{index + 1}</span></td><td className="shop-name"><strong>{shop.shop}</strong>{!shop.hasTarget && <small className="no-target-badge">No Target</small>}</td><td>{shop.hasTarget ? tableValue(shop.viewTarget) : "—"}</td><td><b>{tableValue(shop.viewActual)}</b></td><td><span className={`mom-value ${momTone(shop.viewActual, shop.viewPrevious)}`}>{momLabel(shop.viewActual, shop.viewPrevious)}</span></td><td><span className={`mom-value ${wowTone}`}>{wowLabel}</span></td><td>{shop.hasTarget ? <div className="achievement-cell"><div><span style={{ width: `${Math.min(shop.viewAchievement, 100)}%` }} /></div><em className={tone(shop.viewAchievement)}>{shop.viewAchievement.toFixed(1)}%</em></div> : <span className="not-applicable">—</span>}</td><td className={shop.hasTarget ? shop.viewActual - shop.viewTarget >= 0 ? "positive-gap" : "gap" : ""}>{shop.hasTarget ? tableValue(shop.viewActual - shop.viewTarget) : "—"}</td></tr>;
           })}
         </tbody></table></div>

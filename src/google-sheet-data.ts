@@ -14,6 +14,14 @@ export type DataRow = {
 
 export type BrandRow = DataRow & { brand: string };
 export type ShopRow = DataRow & { brand: string; code: string; shop: string };
+export type DailySale = {
+  date: string;
+  code: string;
+  shop: string;
+  brand: string;
+  qty: number;
+  net: number;
+};
 export type DashboardData = {
   area: string;
   month: string;
@@ -21,10 +29,38 @@ export type DashboardData = {
   totals: DataRow;
   brands: BrandRow[];
   shops: ShopRow[];
+  sales: DailySale[];
   comparison?: unknown;
 };
 
-export const fallbackData = fallbackJson as DashboardData;
+function fallbackSales(data: Omit<DashboardData, "sales">): DailySale[] {
+  const [year, month] = data.latest.split("-").map(Number);
+  const currentPrefix = `${year}-${String(month).padStart(2, "0")}`;
+  const previousDate = new Date(Date.UTC(year, month - 2, 1));
+  const previousPrefix = `${previousDate.getUTCFullYear()}-${String(previousDate.getUTCMonth() + 1).padStart(2, "0")}`;
+  return data.shops.flatMap((row) => {
+    const current = row.dailyQty.map((qty, index) => ({
+      date: `${currentPrefix}-${String(index + 1).padStart(2, "0")}`,
+      code: row.code,
+      shop: row.shop,
+      brand: row.brand,
+      qty,
+      net: row.dailyNet[index] ?? 0,
+    }));
+    const previous = (row.previousDailyQty ?? []).map((qty, index) => ({
+      date: `${previousPrefix}-${String(index + 1).padStart(2, "0")}`,
+      code: row.code,
+      shop: row.shop,
+      brand: row.brand,
+      qty,
+      net: row.previousDailyNet?.[index] ?? 0,
+    }));
+    return [...current, ...previous].filter((sale) => sale.qty !== 0 || sale.net !== 0);
+  });
+}
+
+const fallbackBase = fallbackJson as Omit<DashboardData, "sales">;
+export const fallbackData: DashboardData = { ...fallbackBase, sales: fallbackSales(fallbackBase) };
 
 const GOOGLE_SHEET_ID = "1qsVJk2DbXW8EInVK7gFIOtCB9-5GdVp5vJhU4hPK29k";
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -247,6 +283,7 @@ export async function loadGoogleSheetData(): Promise<DashboardData> {
     totals: combineRows(shops, days),
     brands,
     shops,
+    sales: salesRows,
     comparison: fallbackData.comparison,
   };
 }
