@@ -26,6 +26,11 @@ export const weekRanges: WeekRange[] = [
   { id: "Week 36", start: "2026-08-31", end: "2026-09-06", label: "31 Aug–6 Sep" },
 ];
 
+export function previousWeekId(weekId: string) {
+  const weekNumber = Number(weekId.match(/\d+/)?.[0]);
+  return Number.isFinite(weekNumber) ? `Week ${weekNumber - 1}` : "Week ก่อน";
+}
+
 function isoTime(isoDate: string) {
   return Date.parse(`${isoDate}T00:00:00Z`);
 }
