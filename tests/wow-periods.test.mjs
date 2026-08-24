@@ -8,7 +8,7 @@ const javascript = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(javascript).toString("base64")}`;
-const { comparableWeekPeriod, shortDateRange, weekRanges, wowChangeRate } = await import(moduleUrl);
+const { comparableWeekPeriod, previousWeekId, shortDateRange, weekRanges, wowChangeRate } = await import(moduleUrl);
 
 test("partial Week 35 compares one day with one base day", () => {
   const period = comparableWeekPeriod(weekRanges[3], "2026-08-24");
@@ -52,4 +52,9 @@ test("a future week is unavailable", () => {
 test("WoW returns no percentage when the comparison base is zero", () => {
   assert.equal(wowChangeRate(120, 100), 20);
   assert.equal(wowChangeRate(10, 0), null);
+});
+
+test("table labels the comparison base with the previous week number", () => {
+  assert.equal(previousWeekId("Week 34"), "Week 33");
+  assert.equal(previousWeekId("Week 32"), "Week 31");
 });

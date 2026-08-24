@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DailySale, type DataRow } from "./google-sheet-data";
-import { comparableWeekPeriod, shortDateRange, weekDataStatus, weekIndexForDate, weekRanges, wowChangeRate } from "./wow-periods";
+import { comparableWeekPeriod, previousWeekId, shortDateRange, weekDataStatus, weekIndexForDate, weekRanges, wowChangeRate } from "./wow-periods";
 
 type Metric = "net" | "qty";
 type ViewMode = "day" | "mtd" | "achieve" | "runrate";
@@ -78,6 +78,8 @@ export default function Home() {
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [metric, setMetric] = useState<Metric>("net");
   const [brandWowSort, setBrandWowSort] = useState<Metric>("net");
+  const [shopBrandWowBrand, setShopBrandWowBrand] = useState("IPHONE");
+  const [shopBrandWowSort, setShopBrandWowSort] = useState<Metric>("net");
   const [viewMode, setViewMode] = useState<ViewMode>("mtd");
   const [selectedBrand, setSelectedBrand] = useState("ALL");
   const [selectedShops, setSelectedShops] = useState<string[]>([]);
@@ -316,6 +318,62 @@ export default function Home() {
     };
   }, [brandWowSort, data.brands, data.latest, data.sales, selectedShops, selectedWeek]);
 
+  const shopBrandWow = useMemo(() => {
+    const range = weekRanges[selectedWeek];
+    const period = comparableWeekPeriod(range, data.latest);
+    const brand = data.brands.some((row) => row.brand === shopBrandWowBrand) ? shopBrandWowBrand : data.brands[0]?.brand ?? "IPHONE";
+    const shopsByCode = new Map<string, string>();
+    data.shops.forEach((row) => shopsByCode.set(row.code, row.shop));
+    data.sales.forEach((row) => shopsByCode.set(row.code, row.shop || shopsByCode.get(row.code) || row.code));
+
+    const rows = [...shopsByCode.entries()]
+      .filter(([code]) => selectedShops.length === 0 || selectedShops.includes(code))
+      .map(([code, shop]) => {
+        const target = data.shops.find((row) => row.code === code && row.brand === brand);
+        const sales = data.sales.filter((sale) => sale.code === code && sale.brand === brand);
+        const current = salesSnapshot(sales, period.currentStart, period.currentEnd);
+        const previous = salesSnapshot(sales, period.baseStart, period.baseEnd);
+        const targetQty = ((target?.targetQty ?? 0) / daysInMonth) * period.currentDays;
+        const targetNet = ((target?.targetNet ?? 0) / daysInMonth) * period.currentDays;
+        return {
+          code,
+          shop,
+          current,
+          previous,
+          targetQty,
+          targetNet,
+          achievementQty: targetQty > 0 ? (current.qty / targetQty) * 100 : null,
+          achievementNet: targetNet > 0 ? (current.net / targetNet) * 100 : null,
+          diffQty: current.qty - previous.qty,
+          diffNet: current.net - previous.net,
+          hasTarget: targetQty > 0 || targetNet > 0,
+        };
+      })
+      .sort((a, b) => b.current[shopBrandWowSort] - a.current[shopBrandWowSort] || a.shop.localeCompare(b.shop));
+
+    const totals = rows.reduce((total, row) => ({
+      current: { qty: total.current.qty + row.current.qty, net: total.current.net + row.current.net },
+      previous: { qty: total.previous.qty + row.previous.qty, net: total.previous.net + row.previous.net },
+      targetQty: total.targetQty + row.targetQty,
+      targetNet: total.targetNet + row.targetNet,
+    }), { current: { qty: 0, net: 0 }, previous: { qty: 0, net: 0 }, targetQty: 0, targetNet: 0 });
+
+    return {
+      brand,
+      range,
+      period,
+      previousWeek: previousWeekId(range.id),
+      rows,
+      totals: {
+        ...totals,
+        achievementQty: totals.targetQty > 0 ? (totals.current.qty / totals.targetQty) * 100 : null,
+        achievementNet: totals.targetNet > 0 ? (totals.current.net / totals.targetNet) * 100 : null,
+        diffQty: totals.current.qty - totals.previous.qty,
+        diffNet: totals.current.net - totals.previous.net,
+      },
+    };
+  }, [data.brands, data.latest, data.sales, data.shops, daysInMonth, selectedShops, selectedWeek, shopBrandWowBrand, shopBrandWowSort]);
+
   const shopWow = useMemo(() => {
     const range = weekRanges[selectedWeek];
     const period = comparableWeekPeriod(range, data.latest);
@@ -487,7 +545,7 @@ export default function Home() {
 
       <section className="section all-brand-wow-section shell" aria-labelledby="all-brand-wow-title">
         <div className="section-heading all-brand-wow-heading">
-          <div><span className="section-number">TABLE</span><h2 id="all-brand-wow-title">All Brand WoW</h2><p>{allBrandWow.range.id} • ปัจจุบัน {shortDateRange(allBrandWow.period.currentStart, allBrandWow.period.currentEnd)} เทียบฐาน {shortDateRange(allBrandWow.period.baseStart, allBrandWow.period.baseEnd)} • {allBrandWow.period.currentDays} วันเท่ากัน • {shopName}</p></div>
+          <div><span className="section-number">TABLE</span><h2 id="all-brand-wow-title">All Brand WoW</h2><p>{allBrandWow.range.id} • {shortDateRange(allBrandWow.period.currentStart, allBrandWow.period.currentEnd)} เทียบ {previousWeekId(allBrandWow.range.id)} • {shortDateRange(allBrandWow.period.baseStart, allBrandWow.period.baseEnd)} • {allBrandWow.period.currentDays} วันเท่ากัน • {shopName}</p></div>
           <div className="all-brand-wow-actions" role="group" aria-label="เลือกการเรียงตาราง All Brand WoW"><span>เรียงตามยอดสัปดาห์ปัจจุบัน</span><div className="segmented"><button className={brandWowSort === "net" ? "selected" : ""} onClick={() => setBrandWowSort("net")}>Net Amount</button><button className={brandWowSort === "qty" ? "selected" : ""} onClick={() => setBrandWowSort("qty")}>Qty</button></div></div>
         </div>
         <div className="all-brand-wow-note"><span><i className="growth" /> เติบโต</span><span><i className="decline" /> ลดลง</span><span><i className="flat" /> ทรงตัว / ไม่มีฐาน</span><b>ตารางแสดงทุก Brand และอัปเดตตาม Week กับ Shop filter</b></div>
@@ -496,7 +554,7 @@ export default function Home() {
             <colgroup><col className="brand-column" /><col span={4} className="qty-column" /><col span={4} className="net-column" /></colgroup>
             <thead>
               <tr className="metric-group-row"><th rowSpan={2}>Brand</th><th colSpan={4} className="qty-group">Quantity (QTY)</th><th colSpan={4} className="net-group">Net Amount (฿)</th></tr>
-              <tr><th>ฐาน<small>{shortDateRange(allBrandWow.period.baseStart, allBrandWow.period.baseEnd)}</small></th><th>ปัจจุบัน<small>{shortDateRange(allBrandWow.period.currentStart, allBrandWow.period.currentEnd)}</small></th><th>Diff QTY</th><th>%WoW QTY</th><th>ฐาน<small>{shortDateRange(allBrandWow.period.baseStart, allBrandWow.period.baseEnd)}</small></th><th>ปัจจุบัน<small>{shortDateRange(allBrandWow.period.currentStart, allBrandWow.period.currentEnd)}</small></th><th>Diff Net</th><th>%WoW Net</th></tr>
+              <tr><th>{previousWeekId(allBrandWow.range.id)}<small>{shortDateRange(allBrandWow.period.baseStart, allBrandWow.period.baseEnd)}</small></th><th>{allBrandWow.range.id}<small>{shortDateRange(allBrandWow.period.currentStart, allBrandWow.period.currentEnd)}</small></th><th>Diff QTY</th><th>%WoW QTY</th><th>{previousWeekId(allBrandWow.range.id)}<small>{shortDateRange(allBrandWow.period.baseStart, allBrandWow.period.baseEnd)}</small></th><th>{allBrandWow.range.id}<small>{shortDateRange(allBrandWow.period.currentStart, allBrandWow.period.currentEnd)}</small></th><th>Diff Net</th><th>%WoW Net</th></tr>
             </thead>
             <tbody>
               {allBrandWow.rows.map((row) => <tr className={selectedBrand === row.brand ? "selected-brand-row" : ""} key={row.brand}>
@@ -565,6 +623,32 @@ export default function Home() {
 
       <section className="section shop-performance-section shell">
         <div className="section-heading shop-heading"><div><span className="section-number">04</span><h2>Shop Performance</h2><p>{selectedBrand === "ALL" ? "สาขาที่มี Target หรือยอดขายใน BMAV" : `สาขาที่มี Target หรือยอดขาย ${selectedBrand}`} • {modeCopy.title} • MoM เทียบ Jul</p></div><span className="shop-count">{shopViews.length} สาขา</span></div>
+        <section className="shop-brand-wow-card" aria-labelledby="shop-brand-wow-title" style={{ "--shop-wow-brand": brandColors[shopBrandWow.brand] ?? "#64748b" } as React.CSSProperties}>
+          <header className="shop-brand-wow-head">
+            <div><span>SHOP · WEEK COMPARISON</span><h3 id="shop-brand-wow-title">Performance WoW รายสาขา</h3><p>{shopBrandWow.previousWeek} {shortDateRange(shopBrandWow.period.baseStart, shopBrandWow.period.baseEnd)} เทียบ {shopBrandWow.range.id} {shortDateRange(shopBrandWow.period.currentStart, shopBrandWow.period.currentEnd)} • {shopBrandWow.period.currentDays} วันเท่ากัน • แสดงสาขา No Target ครบ</p></div>
+            <div className="shop-brand-wow-controls">
+              <label htmlFor="shop-brand-wow-brand">เลือก Brand</label>
+              <select id="shop-brand-wow-brand" value={shopBrandWow.brand} onChange={(event) => setShopBrandWowBrand(event.target.value)}>{data.brands.map((row) => <option key={row.brand} value={row.brand}>{row.brand}</option>)}</select>
+              <div className="segmented" role="group" aria-label="เรียง Performance WoW รายสาขา"><button className={shopBrandWowSort === "net" ? "selected" : ""} onClick={() => setShopBrandWowSort("net")}>Net Amount</button><button className={shopBrandWowSort === "qty" ? "selected" : ""} onClick={() => setShopBrandWowSort("qty")}>Qty</button></div>
+            </div>
+          </header>
+          <div className="shop-brand-wow-legend"><b>{shopBrandWow.brand}</b><span><i className="growth" /> เติบโต</span><span><i className="decline" /> ลดลง</span><span><i className="flat" /> ทรงตัว</span><small>Target คำนวณตามจำนวนวันของ Week ที่เลือก</small></div>
+          <div className="shop-brand-wow-wrap">
+            <table className="shop-brand-wow-table">
+              <colgroup><col className="shop-column" /><col span={5} className="qty-column" /><col span={5} className="net-column" /></colgroup>
+              <thead>
+                <tr className="shop-brand-wow-groups"><th rowSpan={2}>Shop</th><th colSpan={5}>Quantity (QTY)</th><th colSpan={5}>Net Amount (฿)</th></tr>
+                <tr><th>{shopBrandWow.previousWeek}<small>{shortDateRange(shopBrandWow.period.baseStart, shopBrandWow.period.baseEnd)}</small></th><th>TG QTY<small>{shopBrandWow.period.currentDays} วัน</small></th><th>{shopBrandWow.range.id}<small>{shortDateRange(shopBrandWow.period.currentStart, shopBrandWow.period.currentEnd)}</small></th><th>% Ach</th><th>Diff QTY</th><th>{shopBrandWow.previousWeek}<small>{shortDateRange(shopBrandWow.period.baseStart, shopBrandWow.period.baseEnd)}</small></th><th>TG Net<small>{shopBrandWow.period.currentDays} วัน</small></th><th>{shopBrandWow.range.id}<small>{shortDateRange(shopBrandWow.period.currentStart, shopBrandWow.period.currentEnd)}</small></th><th>% Ach Net</th><th>Diff Net</th></tr>
+              </thead>
+              <tbody>{shopBrandWow.rows.map((row) => <tr key={row.code}>
+                <th><strong>{row.shop}</strong><small>{row.code}{!row.hasTarget ? " · No Target" : ""}</small></th>
+                <td>{integer.format(row.previous.qty)}</td><td>{integer.format(row.targetQty)}</td><td><b>{integer.format(row.current.qty)}</b></td><td><span className={`shop-brand-wow-ach ${row.achievementQty == null ? "flat" : tone(row.achievementQty)}`}>{row.achievementQty == null ? "—" : `${row.achievementQty.toFixed(1)}%`}</span></td><td className={`shop-brand-wow-diff ${comparisonTone(row.diffQty)}`}>{signedInteger(row.diffQty)}</td>
+                <td>{integer.format(row.previous.net)}</td><td>{integer.format(row.targetNet)}</td><td><b>{integer.format(row.current.net)}</b></td><td><span className={`shop-brand-wow-ach ${row.achievementNet == null ? "flat" : tone(row.achievementNet)}`}>{row.achievementNet == null ? "—" : `${row.achievementNet.toFixed(1)}%`}</span></td><td className={`shop-brand-wow-diff ${comparisonTone(row.diffNet)}`}>{signedInteger(row.diffNet)}</td>
+              </tr>)}</tbody>
+              <tfoot><tr><th>Grand Total</th><td>{integer.format(shopBrandWow.totals.previous.qty)}</td><td>{integer.format(shopBrandWow.totals.targetQty)}</td><td>{integer.format(shopBrandWow.totals.current.qty)}</td><td><span className={`shop-brand-wow-ach ${shopBrandWow.totals.achievementQty == null ? "flat" : tone(shopBrandWow.totals.achievementQty)}`}>{shopBrandWow.totals.achievementQty == null ? "—" : `${shopBrandWow.totals.achievementQty.toFixed(1)}%`}</span></td><td className={`shop-brand-wow-diff ${comparisonTone(shopBrandWow.totals.diffQty)}`}>{signedInteger(shopBrandWow.totals.diffQty)}</td><td>{integer.format(shopBrandWow.totals.previous.net)}</td><td>{integer.format(shopBrandWow.totals.targetNet)}</td><td>{integer.format(shopBrandWow.totals.current.net)}</td><td><span className={`shop-brand-wow-ach ${shopBrandWow.totals.achievementNet == null ? "flat" : tone(shopBrandWow.totals.achievementNet)}`}>{shopBrandWow.totals.achievementNet == null ? "—" : `${shopBrandWow.totals.achievementNet.toFixed(1)}%`}</span></td><td className={`shop-brand-wow-diff ${comparisonTone(shopBrandWow.totals.diffNet)}`}>{signedInteger(shopBrandWow.totals.diffNet)}</td></tr></tfoot>
+            </table>
+          </div>
+        </section>
         <section className="wow-brand-chart" aria-labelledby="brand-wow-chart-title">
           <header><div><span>WEEK COMPARISON</span><h3 id="brand-wow-chart-title">%WoW by Brand</h3></div><p>{metricLabel} • {wow.range.id} {shortDateRange(wow.period.currentStart, wow.period.currentEnd)}<br />เทียบฐาน {shortDateRange(wow.period.baseStart, wow.period.baseEnd)} • {wow.period.currentDays} วันเท่ากัน</p></header>
           <div className="diverging-chart" role="img" aria-label={`กราฟเปอร์เซ็นต์ Week on Week แยกตาม Brand สำหรับ ${metricLabel}`}>
