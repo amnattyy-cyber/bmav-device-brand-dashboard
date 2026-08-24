@@ -35,6 +35,8 @@ const sumTo = (values: number[], day: number) => values.slice(0, day).reduce((su
 const signed = (value: number, digits = 1) => `${value > 0 ? "+" : ""}${value.toFixed(digits)}%`;
 const wowRateLabel = (value: number | null) => value == null ? "—" : signed(value);
 const wowRateTone = (value: number | null) => value == null ? "neutral" : value >= 0 ? "positive" : "negative";
+const comparisonTone = (value: number | null) => value == null || value === 0 ? "flat" : value > 0 ? "growth" : "decline";
+const signedInteger = (value: number) => `${value > 0 ? "+" : ""}${integer.format(value)}`;
 const salesSnapshot = (sales: DailySale[], start: string, end: string | null): WeekSnapshot => {
   if (!end) return { net: 0, qty: 0 };
   return sales.reduce((total, sale) => sale.date >= start && sale.date <= end
@@ -75,6 +77,7 @@ export default function Home() {
   const [sourceStatus, setSourceStatus] = useState<SourceStatus>("loading");
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [metric, setMetric] = useState<Metric>("net");
+  const [brandWowSort, setBrandWowSort] = useState<Metric>("net");
   const [viewMode, setViewMode] = useState<ViewMode>("mtd");
   const [selectedBrand, setSelectedBrand] = useState("ALL");
   const [selectedShops, setSelectedShops] = useState<string[]>([]);
@@ -278,6 +281,41 @@ export default function Home() {
     }));
   }, [data.brands, data.latest, data.sales, metric, selectedShops, selectedWeek]);
 
+  const allBrandWow = useMemo(() => {
+    const range = weekRanges[selectedWeek];
+    const period = comparableWeekPeriod(range, data.latest);
+    const rows = data.brands.map(({ brand }) => {
+      const sales = data.sales.filter((sale) => sale.brand === brand && (selectedShops.length === 0 || selectedShops.includes(sale.code)));
+      const current = salesSnapshot(sales, period.currentStart, period.currentEnd);
+      const previous = salesSnapshot(sales, period.baseStart, period.baseEnd);
+      return {
+        brand,
+        current,
+        previous,
+        diffQty: current.qty - previous.qty,
+        diffNet: current.net - previous.net,
+        qtyRate: wowChangeRate(current.qty, previous.qty),
+        netRate: wowChangeRate(current.net, previous.net),
+      };
+    });
+    const totals = rows.reduce((total, row) => ({
+      current: { qty: total.current.qty + row.current.qty, net: total.current.net + row.current.net },
+      previous: { qty: total.previous.qty + row.previous.qty, net: total.previous.net + row.previous.net },
+    }), { current: { qty: 0, net: 0 }, previous: { qty: 0, net: 0 } });
+    return {
+      range,
+      period,
+      rows: rows.sort((a, b) => b.current[brandWowSort] - a.current[brandWowSort] || a.brand.localeCompare(b.brand)),
+      totals: {
+        ...totals,
+        diffQty: totals.current.qty - totals.previous.qty,
+        diffNet: totals.current.net - totals.previous.net,
+        qtyRate: wowChangeRate(totals.current.qty, totals.previous.qty),
+        netRate: wowChangeRate(totals.current.net, totals.previous.net),
+      },
+    };
+  }, [brandWowSort, data.brands, data.latest, data.sales, selectedShops, selectedWeek]);
+
   const shopWow = useMemo(() => {
     const range = weekRanges[selectedWeek];
     const period = comparableWeekPeriod(range, data.latest);
@@ -444,6 +482,31 @@ export default function Home() {
           <article className="driver-panel"><header><div><span>BRAND DRIVER</span><h3>ตัวผลักดัน / ตัวฉุด</h3></div><small>Δ Net Amount</small></header><div className="driver-list">{[...wow.brandDrivers.slice(0, 2), ...wow.brandDrivers.slice(-2).reverse().filter((driver) => !wow.brandDrivers.slice(0, 2).includes(driver))].map((driver) => <div key={driver.name}><b>{driver.name}</b><span className={driver.deltaNet >= 0 ? "positive" : "negative"}>{driver.deltaNet >= 0 ? "+" : ""}฿{compactChart(driver.deltaNet)}</span><small>QTY {driver.deltaQty >= 0 ? "+" : ""}{integer.format(driver.deltaQty)} • Share {signed(driver.shareDelta)} pts</small></div>)}</div></article>
           <article className="driver-panel"><header><div><span>SHOP DRIVER</span><h3>สาขาที่ต้องจับตา</h3></div><small>Δ Net Amount</small></header><div className="driver-list">{wow.shopDrivers.slice(0, 2).map((driver) => <div key={driver.name}><b>{driver.name}</b><span className={driver.deltaNet >= 0 ? "positive" : "negative"}>{driver.deltaNet >= 0 ? "+" : ""}฿{compactChart(driver.deltaNet)}</span><small>QTY {driver.deltaQty >= 0 ? "+" : ""}{integer.format(driver.deltaQty)} • Share {signed(driver.shareDelta)} pts</small></div>)}{wow.shopDrivers.slice(-2).reverse().filter((driver) => !wow.shopDrivers.slice(0, 2).includes(driver)).map((driver) => <div key={driver.name}><b>{driver.name}</b><span className={driver.deltaNet >= 0 ? "positive" : "negative"}>{driver.deltaNet >= 0 ? "+" : ""}฿{compactChart(driver.deltaNet)}</span><small>QTY {driver.deltaQty >= 0 ? "+" : ""}{integer.format(driver.deltaQty)} • Share {signed(driver.shareDelta)} pts</small></div>)}</div></article>
           <aside className="action-panel"><span>INSIGHT → ACTION</span><h3>สัปดาห์นี้: {wow.direction}</h3><p><b>สัญญาณ:</b> {wow.cause} ขณะที่ Shop contribution ของ {wow.leadShop?.name ?? "สาขาหลัก"} เปลี่ยน {signed(wow.leadShop?.shareDelta ?? 0)} pts</p><div><small>ACTION ชี้เป้า</small><strong>{wow.action}</strong></div></aside>
+        </div>
+      </section>
+
+      <section className="section all-brand-wow-section shell" aria-labelledby="all-brand-wow-title">
+        <div className="section-heading all-brand-wow-heading">
+          <div><span className="section-number">TABLE</span><h2 id="all-brand-wow-title">All Brand WoW</h2><p>{allBrandWow.range.id} • ปัจจุบัน {shortDateRange(allBrandWow.period.currentStart, allBrandWow.period.currentEnd)} เทียบฐาน {shortDateRange(allBrandWow.period.baseStart, allBrandWow.period.baseEnd)} • {allBrandWow.period.currentDays} วันเท่ากัน • {shopName}</p></div>
+          <div className="all-brand-wow-actions" role="group" aria-label="เลือกการเรียงตาราง All Brand WoW"><span>เรียงตามยอดสัปดาห์ปัจจุบัน</span><div className="segmented"><button className={brandWowSort === "net" ? "selected" : ""} onClick={() => setBrandWowSort("net")}>Net Amount</button><button className={brandWowSort === "qty" ? "selected" : ""} onClick={() => setBrandWowSort("qty")}>Qty</button></div></div>
+        </div>
+        <div className="all-brand-wow-note"><span><i className="growth" /> เติบโต</span><span><i className="decline" /> ลดลง</span><span><i className="flat" /> ทรงตัว / ไม่มีฐาน</span><b>ตารางแสดงทุก Brand และอัปเดตตาม Week กับ Shop filter</b></div>
+        <div className="all-brand-wow-wrap">
+          <table className="all-brand-wow-table">
+            <colgroup><col className="brand-column" /><col span={4} className="qty-column" /><col span={4} className="net-column" /></colgroup>
+            <thead>
+              <tr className="metric-group-row"><th rowSpan={2}>Brand</th><th colSpan={4} className="qty-group">Quantity (QTY)</th><th colSpan={4} className="net-group">Net Amount (฿)</th></tr>
+              <tr><th>ฐาน<small>{shortDateRange(allBrandWow.period.baseStart, allBrandWow.period.baseEnd)}</small></th><th>ปัจจุบัน<small>{shortDateRange(allBrandWow.period.currentStart, allBrandWow.period.currentEnd)}</small></th><th>Diff QTY</th><th>%WoW QTY</th><th>ฐาน<small>{shortDateRange(allBrandWow.period.baseStart, allBrandWow.period.baseEnd)}</small></th><th>ปัจจุบัน<small>{shortDateRange(allBrandWow.period.currentStart, allBrandWow.period.currentEnd)}</small></th><th>Diff Net</th><th>%WoW Net</th></tr>
+            </thead>
+            <tbody>
+              {allBrandWow.rows.map((row) => <tr className={selectedBrand === row.brand ? "selected-brand-row" : ""} key={row.brand}>
+                <th><i style={{ background: brandColors[row.brand] ?? "#64748b" }} />{row.brand}</th>
+                <td>{integer.format(row.previous.qty)}</td><td><b>{integer.format(row.current.qty)}</b></td><td className={`wow-diff ${comparisonTone(row.diffQty)}`}>{signedInteger(row.diffQty)}</td><td><span className={`all-brand-wow-rate ${comparisonTone(row.qtyRate)}`}>{wowRateLabel(row.qtyRate)}</span></td>
+                <td>{integer.format(row.previous.net)}</td><td><b>{integer.format(row.current.net)}</b></td><td className={`wow-diff ${comparisonTone(row.diffNet)}`}>{signedInteger(row.diffNet)}</td><td><span className={`all-brand-wow-rate ${comparisonTone(row.netRate)}`}>{wowRateLabel(row.netRate)}</span></td>
+              </tr>)}
+            </tbody>
+            <tfoot><tr><th>Grand Total</th><td>{integer.format(allBrandWow.totals.previous.qty)}</td><td>{integer.format(allBrandWow.totals.current.qty)}</td><td className={`wow-diff ${comparisonTone(allBrandWow.totals.diffQty)}`}>{signedInteger(allBrandWow.totals.diffQty)}</td><td><span className={`all-brand-wow-rate ${comparisonTone(allBrandWow.totals.qtyRate)}`}>{wowRateLabel(allBrandWow.totals.qtyRate)}</span></td><td>{integer.format(allBrandWow.totals.previous.net)}</td><td>{integer.format(allBrandWow.totals.current.net)}</td><td className={`wow-diff ${comparisonTone(allBrandWow.totals.diffNet)}`}>{signedInteger(allBrandWow.totals.diffNet)}</td><td><span className={`all-brand-wow-rate ${comparisonTone(allBrandWow.totals.netRate)}`}>{wowRateLabel(allBrandWow.totals.netRate)}</span></td></tr></tfoot>
+          </table>
         </div>
       </section>
 

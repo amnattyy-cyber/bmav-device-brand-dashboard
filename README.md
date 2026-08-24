@@ -12,6 +12,7 @@ Public interactive dashboard for BMA V - Central device performance in August 20
 - Week-on-week analysis across Week 32–36 (3 August–6 September), defaulting to the period that contains the latest live date
 - Net Amount and QTY deltas, WoW percentages, brand/shop drivers, average selling value, shop contribution signals, and a targeted action summary
 - Per-brand WoW badges alongside the existing MoM badges, responsive to the selected week, metric, and shop filter
+- Compact All Brand WoW table with equal-day QTY and Net Amount base/current values, differences, percentage changes, sorting, and a Grand Total row
 - Model x Area ranking matrix with the top 12 brands, Daily/MTD/Run Rate values, projected run-rate achievement, per-brand shop ranks, an unranked ALL Shop total, and a compact Capture View
 - Model x Area uses Brand-colored column headers and highlights the percentage in red when a shop has Target but no MTD sales
 - Shop Performance and Model x Area tables include shops with sales even when Target is zero, while shops with neither Target nor sales remain hidden
