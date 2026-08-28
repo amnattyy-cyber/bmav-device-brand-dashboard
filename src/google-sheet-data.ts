@@ -1,5 +1,5 @@
 import fallbackJson from "./dashboard-data.json";
-import { parseModelSalesTable, type ModelSale } from "./model-sales";
+import { parseCsv, parseModelSalesTable, type ModelSale } from "./model-sales";
 
 export type DataRow = {
   brand?: string;
@@ -186,22 +186,30 @@ async function fetchSheetPage(sheetName: string, tableQuery?: string): Promise<s
   });
 }
 
-async function fetchSheet(sheetName: string): Promise<string[][]> {
-  if (sheetName !== "Daily_Sales_Model") return fetchSheetPage(sheetName);
-
-  // Google can reject a large cross-origin JSONP response even though the
-  // same sheet remains available in HTML. Load model sales in smaller pages
-  // so the live dashboard stays reliable as new daily rows are appended.
-  const pageSize = 100;
-  const combined: string[][] = [];
-  for (let offset = 0; offset < 20_000; offset += pageSize) {
-    const page = await fetchSheetPage(sheetName, `limit ${pageSize} offset ${offset}`);
-    if (!combined.length) combined.push(page[0] ?? []);
-    const rows = page.slice(1);
-    combined.push(...rows);
-    if (rows.length < pageSize) break;
+async function fetchModelSheet(): Promise<string[][]> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 60_000);
+  const query = new URLSearchParams({
+    format: "csv",
+    gid: SHEET_GIDS.Daily_Sales_Model,
+    _: String(Date.now()),
+  });
+  try {
+    const response = await fetch(`https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/export?${query}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`Google Sheet Daily_Sales_Model returned ${response.status}`);
+    const rows = parseCsv(await response.text());
+    if (rows.length < 2) throw new Error("Google Sheet Daily_Sales_Model has no data rows");
+    return rows;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return combined;
+}
+
+async function fetchSheet(sheetName: string): Promise<string[][]> {
+  return sheetName === "Daily_Sales_Model" ? fetchModelSheet() : fetchSheetPage(sheetName);
 }
 
 export async function loadGoogleSheetData(): Promise<DashboardData> {
