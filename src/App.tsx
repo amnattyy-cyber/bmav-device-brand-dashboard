@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DailySale, type DataRow } from "./google-sheet-data";
+import { modelSaleKey } from "./model-sales";
 import { comparableWeekPeriod, previousWeekId, shortDateRange, weekDataStatus, weekIndexForDate, weekRanges, wowChangeRate } from "./wow-periods";
 
 type Metric = "net" | "qty";
@@ -80,6 +81,10 @@ export default function Home() {
   const [brandWowSort, setBrandWowSort] = useState<Metric>("net");
   const [shopBrandWowBrand, setShopBrandWowBrand] = useState("IPHONE");
   const [shopBrandWowSort, setShopBrandWowSort] = useState<Metric>("net");
+  const [modelBrand, setModelBrand] = useState("ALL");
+  const [modelQuery, setModelQuery] = useState("");
+  const [selectedModelKey, setSelectedModelKey] = useState("");
+  const [modelSort, setModelSort] = useState<Metric>("net");
   const [viewMode, setViewMode] = useState<ViewMode>("mtd");
   const [selectedBrand, setSelectedBrand] = useState("ALL");
   const [selectedShops, setSelectedShops] = useState<string[]>([]);
@@ -402,6 +407,95 @@ export default function Home() {
   const activeWowRate = metric === "net" ? wow.netRate : wow.qtyRate;
   const activeWowTone = activeWowRate == null ? "neutral" : activeWowRate >= 0 ? "up" : "down";
 
+  const modelPerformance = useMemo(() => {
+    const range = weekRanges[selectedWeek];
+    const period = comparableWeekPeriod(range, data.latest);
+    const selectedDate = formatDate(selectedDay);
+    const scopedSales = data.modelSales.filter((sale) => selectedShops.length === 0 || selectedShops.includes(sale.code));
+    const brandOptions = [...new Set(scopedSales.map((sale) => sale.brand))].sort((a, b) => a.localeCompare(b));
+    const grouped = new Map<string, { key: string; brand: string; model: string; sales: typeof scopedSales }>();
+    for (const sale of scopedSales) {
+      const key = modelSaleKey(sale);
+      const item = grouped.get(key);
+      if (item) item.sales.push(sale);
+      else grouped.set(key, { key, brand: sale.brand, model: sale.model, sales: [sale] });
+    }
+    const normalizedQuery = modelQuery.trim().toLocaleUpperCase();
+    const summarize = (item: typeof grouped extends Map<string, infer T> ? T : never) => {
+      const daily = salesSnapshot(item.sales, selectedDate, selectedDate);
+      const mtd = salesSnapshot(item.sales, `${monthPrefix}-01`, selectedDate);
+      const current = salesSnapshot(item.sales, period.currentStart, period.currentEnd);
+      const previous = salesSnapshot(item.sales, period.baseStart, period.baseEnd);
+      return {
+        ...item,
+        daily,
+        mtd,
+        current,
+        previous,
+        diffQty: current.qty - previous.qty,
+        diffNet: current.net - previous.net,
+        wowQty: wowChangeRate(current.qty, previous.qty),
+        wowNet: wowChangeRate(current.net, previous.net),
+        activeShops: new Set(item.sales.filter((sale) => sale.date >= `${monthPrefix}-01` && sale.date <= selectedDate).map((sale) => sale.code)).size,
+      };
+    };
+    const rows = [...grouped.values()]
+      .filter((item) => (modelBrand === "ALL" || item.brand === modelBrand) && (!normalizedQuery || `${item.brand} ${item.model}`.toLocaleUpperCase().includes(normalizedQuery)))
+      .map(summarize)
+      .sort((a, b) => b.current[modelSort] - a.current[modelSort] || b.mtd[modelSort] - a.mtd[modelSort] || a.model.localeCompare(b.model));
+    const active = rows.find((row) => row.key === selectedModelKey) ?? rows[0] ?? null;
+
+    const shopsByCode = new Map<string, string>();
+    data.shops.forEach((row) => shopsByCode.set(row.code, row.shop));
+    data.sales.forEach((row) => shopsByCode.set(row.code, row.shop || shopsByCode.get(row.code) || row.code));
+    scopedSales.forEach((row) => shopsByCode.set(row.code, row.shop || shopsByCode.get(row.code) || row.code));
+    const activeSales = active ? scopedSales.filter((sale) => modelSaleKey(sale) === active.key) : [];
+    const shopRows = [...shopsByCode.entries()]
+      .filter(([code]) => selectedShops.length === 0 || selectedShops.includes(code))
+      .map(([code, shop]) => {
+        const sales = activeSales.filter((sale) => sale.code === code);
+        const daily = salesSnapshot(sales, selectedDate, selectedDate);
+        const mtd = salesSnapshot(sales, `${monthPrefix}-01`, selectedDate);
+        const current = salesSnapshot(sales, period.currentStart, period.currentEnd);
+        const previous = salesSnapshot(sales, period.baseStart, period.baseEnd);
+        return {
+          code,
+          shop,
+          daily,
+          mtd,
+          current,
+          previous,
+          wowQty: wowChangeRate(current.qty, previous.qty),
+          wowNet: wowChangeRate(current.net, previous.net),
+        };
+      })
+      .sort((a, b) => b.current[modelSort] - a.current[modelSort] || b.mtd[modelSort] - a.mtd[modelSort] || a.shop.localeCompare(b.shop));
+    const trend = Array.from({ length: selectedDay }, (_, index) => {
+      const date = formatDate(index + 1);
+      return { day: index + 1, ...salesSnapshot(activeSales, date, date) };
+    });
+    const current = active?.current ?? { qty: 0, net: 0 };
+    const previous = active?.previous ?? { qty: 0, net: 0 };
+    return {
+      range,
+      period,
+      previousWeek: previousWeekId(range.id),
+      brandOptions,
+      rows,
+      active,
+      current,
+      previous,
+      wowQty: wowChangeRate(current.qty, previous.qty),
+      wowNet: wowChangeRate(current.net, previous.net),
+      shopRows,
+      trend,
+      sellingShops: shopRows.filter((row) => row.mtd.qty > 0 || row.mtd.net > 0).length,
+      totalShops: shopRows.length,
+    };
+  }, [data.latest, data.modelSales, data.sales, data.shops, formatDate, modelBrand, modelQuery, modelSort, monthPrefix, selectedDay, selectedModelKey, selectedShops, selectedWeek]);
+  const modelTrendMax = Math.max(...modelPerformance.trend.map((item) => item[modelSort]), 1);
+  const modelColor = modelPerformance.active ? brandColors[modelPerformance.active.brand] ?? "#7c3aed" : "#7c3aed";
+
   const modelAreaMatrix = useMemo(() => {
     const scopedRows = data.shops.filter((row) => selectedShops.length === 0 || selectedShops.includes(row.code));
     const performanceValue = (row: DataRow) => {
@@ -610,19 +704,62 @@ export default function Home() {
 
       <section className={`section model-area-section shell ${matrixCapture ? "capture-mode" : ""}`} aria-labelledby="model-area-title">
         <div className="section-heading model-area-heading">
-          <div><span className="section-number">03</span><h2 id="model-area-title">Model x Area · Ranking</h2><p>Top {modelAreaMatrix.topBrands.length} Brand ตาม {modeCopy.actual} {metricLabel} • {viewMode === "day" ? `วันที่ ${selectedDay} Aug` : viewMode === "runrate" ? `ประมาณการสิ้นเดือนจากยอดสะสมถึง ${selectedDay} Aug` : `ยอดสะสมถึง ${selectedDay} Aug`} • รวมสาขาที่ไม่มี Target แต่มียอดขาย</p></div>
+          <div><span className="section-number">03</span><h2 id="model-area-title">Brand x Shop · Ranking</h2><p>Top {modelAreaMatrix.topBrands.length} Brand ตาม {modeCopy.actual} {metricLabel} • {viewMode === "day" ? `วันที่ ${selectedDay} Aug` : viewMode === "runrate" ? `ประมาณการสิ้นเดือนจากยอดสะสมถึง ${selectedDay} Aug` : `ยอดสะสมถึง ${selectedDay} Aug`} • รวมสาขาที่ไม่มี Target แต่มียอดขาย</p></div>
           <div className="matrix-actions"><button className={`capture-view-button ${matrixCapture ? "active" : ""}`} type="button" aria-pressed={matrixCapture} onClick={toggleMatrixCapture}><span aria-hidden="true">{matrixCapture ? "×" : "▣"}</span>{matrixCapture ? "ออกจาก Capture" : "Capture View"}</button><div className="matrix-ranking-control" role="group" aria-label="เลือกเกณฑ์จัดอันดับสี"><span>จัดสีตามอันดับ</span><div className="segmented"><button className={matrixRanking === "rank" ? "selected" : ""} onClick={() => setMatrixRanking("rank")}>Rank</button><button className={matrixRanking === "achieve" ? "selected" : ""} onClick={() => setMatrixRanking("achieve")}>% Ach</button><button className={matrixRanking === "runrate" ? "selected" : ""} onClick={() => setMatrixRanking("runrate")}>%Runrate</button></div></div></div>
         </div>
         <div className="matrix-legend"><span><i className="matrix-swatch best" /> อันดับสูง</span><span><i className="matrix-swatch middle" /> กลาง</span><span><i className="matrix-swatch low" /> ต้องเร่ง</span><small>{matrixCapture ? "Capture View แสดงทุก Brand ในภาพเดียว • กด Esc เพื่อออก" : "คลิกชื่อคอลัมน์เพื่อเรียงสาขา • เลื่อนเมาส์ที่ตัวเลขเพื่อดูยอด, Run Rate และ Target"}</small></div>
         <div className="model-area-wrap">
           <table className="model-area-table">
-            <thead><tr><th>Shop / Area</th><th className={`all-model-column ${modelAreaMatrix.activeSort === "ALL" ? "sorted" : ""}`}><button onClick={() => setMatrixSortBrand("ALL")}><strong>ALL MODEL</strong><small>รวมทุก Brand/รุ่น</small></button></th>{modelAreaMatrix.topBrands.map((brand) => <th className={`brand-column-header ${selectedBrand === brand ? "selected-brand-column" : ""} ${modelAreaMatrix.activeSort === brand ? "sorted" : ""}`} style={{ "--brand": brandColors[brand] ?? "#64748b" } as React.CSSProperties} key={brand}><button onClick={() => setMatrixSortBrand(brand)}><strong>{brand}</strong><small>คลิกเพื่อเรียง</small></button></th>)}</tr></thead>
+            <thead><tr><th>Shop / Area</th><th className={`all-model-column ${modelAreaMatrix.activeSort === "ALL" ? "sorted" : ""}`}><button onClick={() => setMatrixSortBrand("ALL")}><strong>ALL BRAND</strong><small>รวมทุก Brand/รุ่น</small></button></th>{modelAreaMatrix.topBrands.map((brand) => <th className={`brand-column-header ${selectedBrand === brand ? "selected-brand-column" : ""} ${modelAreaMatrix.activeSort === brand ? "sorted" : ""}`} style={{ "--brand": brandColors[brand] ?? "#64748b" } as React.CSSProperties} key={brand}><button onClick={() => setMatrixSortBrand(brand)}><strong>{brand}</strong><small>คลิกเพื่อเรียง</small></button></th>)}</tr></thead>
             <tbody>
               <tr className="all-shop-row"><th><strong>ALL Shop</strong><small>ผลรวมทุกสาขา · ไม่จัดอันดับ</small></th><td>{matrixCell(modelAreaMatrix.allShop.all, undefined, true)}</td>{modelAreaMatrix.topBrands.map((brand) => <td className={selectedBrand === brand ? "selected-brand-column" : ""} key={brand}>{matrixCell(modelAreaMatrix.allShop.brands[brand], undefined, true)}</td>)}</tr>
               {modelAreaMatrix.shopRows.map((row) => <tr key={row.code}><th><strong>{row.shop}</strong><small>{row.code}{row.all.monthlyTarget <= 0 && row.all.mtdActual > 0 ? " · No Target" : ""}</small></th><td className="all-model-column">{matrixCell(row.all, modelAreaMatrix.ranks.get(`ALL|${row.code}`))}</td>{modelAreaMatrix.topBrands.map((brand) => <td className={selectedBrand === brand ? "selected-brand-column" : ""} key={brand}>{matrixCell(row.brands[brand], modelAreaMatrix.ranks.get(`${brand}|${row.code}`))}</td>)}</tr>)}
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="section model-performance-section shell" aria-labelledby="model-performance-title" style={{ "--model-brand": modelColor } as React.CSSProperties}>
+        <div className="section-heading model-performance-heading">
+          <div><span className="section-number">MODEL</span><h2 id="model-performance-title">Model Performance</h2><p>ข้อมูล LIVE จาก Daily_Sales_Model • Daily ณ {thaiDate(selectedDay)} • {modelPerformance.range.id} {shortDateRange(modelPerformance.period.currentStart, modelPerformance.period.currentEnd)} เทียบ {modelPerformance.previousWeek} {shortDateRange(modelPerformance.period.baseStart, modelPerformance.period.baseEnd)} • {weekDataStatus(modelPerformance.period)}</p></div>
+          <div className="model-performance-controls">
+            <label>Brand<select value={modelBrand} onChange={(event) => { setModelBrand(event.target.value); setSelectedModelKey(""); }}><option value="ALL">ALL BRANDS</option>{modelPerformance.brandOptions.map((brand) => <option key={brand} value={brand}>{brand}</option>)}</select></label>
+            <label>ค้นหา Model<input type="search" value={modelQuery} onChange={(event) => { setModelQuery(event.target.value); setSelectedModelKey(""); }} placeholder="พิมพ์ชื่อรุ่น" /></label>
+            <label className="active-model-select">รุ่นที่ Focus<select value={modelPerformance.active?.key ?? ""} onChange={(event) => setSelectedModelKey(event.target.value)} disabled={!modelPerformance.rows.length}><option value="">เลือกรุ่น</option>{modelPerformance.rows.map((row) => <option key={row.key} value={row.key}>{row.brand} · {row.model}</option>)}</select></label>
+            <div className="model-sort-control"><span>เรียงตาม</span><div className="segmented"><button className={modelSort === "net" ? "selected" : ""} onClick={() => setModelSort("net")}>Net</button><button className={modelSort === "qty" ? "selected" : ""} onClick={() => setModelSort("qty")}>Qty</button></div></div>
+          </div>
+        </div>
+
+        {!data.modelSales.length ? <div className="model-empty-state"><strong>ยังไม่พบข้อมูลรุ่นจาก Google Sheet</strong><span>Dashboard ส่วน Brand ยังคงใช้งานได้ และระบบจะลองเชื่อม Daily_Sales_Model ใหม่อัตโนมัติทุก 5 นาที</span></div> : <>
+          <div className="model-focus-strip">
+            <article><span>รุ่นที่ Focus</span><strong>{modelPerformance.active?.model ?? "—"}</strong><small>{modelPerformance.active?.brand ?? ""} • Area {data.area}</small></article>
+            <article><span>Daily · {selectedDay} Aug</span><strong>{integer.format(modelPerformance.active?.daily.qty ?? 0)} เครื่อง</strong><small>Net ฿{integer.format(modelPerformance.active?.daily.net ?? 0)}</small></article>
+            <article><span>{modelPerformance.range.id} · {modelPerformance.period.currentDays} วัน</span><strong>{integer.format(modelPerformance.current.qty)} เครื่อง</strong><small>Net ฿{integer.format(modelPerformance.current.net)}</small></article>
+            <article><span>%WoW Qty / Net</span><strong><em className={`model-rate ${comparisonTone(modelPerformance.wowQty)}`}>{wowRateLabel(modelPerformance.wowQty)}</em><em className={`model-rate ${comparisonTone(modelPerformance.wowNet)}`}>{wowRateLabel(modelPerformance.wowNet)}</em></strong><small>เทียบจำนวนวันเท่ากัน</small></article>
+            <article><span>สาขาที่มียอด MTD</span><strong>{modelPerformance.sellingShops}/{modelPerformance.totalShops}</strong><small>สาขา • ถึง {selectedDay} Aug</small></article>
+          </div>
+
+          <section className="model-area-card" aria-labelledby="model-area-overview-title">
+            <header><div><span>BY AREA · ALL MODELS</span><h3 id="model-area-overview-title">ภาพรวม Performance รายรุ่น</h3></div><p>{modelPerformance.rows.length} รุ่น • คลิกแถวเพื่อ Focus Daily และ By Shop</p></header>
+            <div className="model-performance-table-wrap"><table className="model-performance-table">
+              <thead><tr><th>Brand</th><th>Model</th><th>Daily<br />QTY</th><th>Daily<br />Net</th><th>{modelPerformance.previousWeek}<br />QTY</th><th>{modelPerformance.range.id}<br />QTY</th><th>%WoW<br />QTY</th><th>{modelPerformance.previousWeek}<br />Net</th><th>{modelPerformance.range.id}<br />Net</th><th>%WoW<br />Net</th><th>MTD<br />QTY</th><th>MTD<br />Net</th></tr></thead>
+              <tbody>{modelPerformance.rows.map((row) => <tr className={modelPerformance.active?.key === row.key ? "active" : ""} key={row.key} onClick={() => setSelectedModelKey(row.key)}><td><span className="model-brand-pill" style={{ "--pill": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.brand}</span></td><th><strong>{row.model}</strong><small>{row.activeShops} สาขามียอด MTD</small></th><td>{integer.format(row.daily.qty)}</td><td>{integer.format(row.daily.net)}</td><td>{integer.format(row.previous.qty)}</td><td><b>{integer.format(row.current.qty)}</b></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span></td><td>{integer.format(row.previous.net)}</td><td><b>{integer.format(row.current.net)}</b></td><td><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></td><td>{integer.format(row.mtd.qty)}</td><td><b>{integer.format(row.mtd.net)}</b></td></tr>)}</tbody>
+            </table></div>
+          </section>
+
+          <div className="model-detail-grid">
+            <section className="model-daily-card">
+              <header><div><span>DAILY TREND · BY AREA</span><h3>{modelPerformance.active?.model ?? "เลือก Model"}</h3></div><p>{modelSort === "net" ? "Net Amount" : "QTY"} • 1–{selectedDay} Aug</p></header>
+              <div className="model-daily-chart">{modelPerformance.trend.map((item) => <div className="model-day-column" key={item.day}><div><i style={{ height: `${(item[modelSort] / modelTrendMax) * 100}%`, background: modelColor }}><span>{modelSort === "net" ? compactChart(item.net) : integer.format(item.qty)}</span></i></div><small>{item.day}</small></div>)}</div>
+              <footer><span>1 Aug</span><b>MTD {integer.format(modelPerformance.active?.mtd.qty ?? 0)} เครื่อง • ฿{integer.format(modelPerformance.active?.mtd.net ?? 0)}</b><span>{selectedDay} Aug</span></footer>
+            </section>
+
+            <section className="model-shop-card">
+              <header><div><span>BY SHOP · FOCUS MODEL</span><h3>WoW รายสาขา</h3></div><p>ครบ {modelPerformance.totalShops} สาขา • รวมสาขาที่ยังไม่มียอดรุ่นนี้</p></header>
+              <div className="model-shop-table-wrap"><table className="model-shop-table"><thead><tr><th>Shop</th><th>Daily<br />QTY</th><th>Daily<br />Net</th><th>{modelPerformance.previousWeek}<br />QTY</th><th>{modelPerformance.range.id}<br />QTY</th><th>%WoW<br />QTY</th><th>{modelPerformance.previousWeek}<br />Net</th><th>{modelPerformance.range.id}<br />Net</th><th>%WoW<br />Net</th></tr></thead><tbody>{modelPerformance.shopRows.map((row) => <tr key={row.code}><th><strong>{row.shop}</strong><small>{row.code}{row.mtd.qty === 0 && row.mtd.net === 0 ? " · No Sales" : ""}</small></th><td>{integer.format(row.daily.qty)}</td><td>{integer.format(row.daily.net)}</td><td>{integer.format(row.previous.qty)}</td><td><b>{integer.format(row.current.qty)}</b></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span></td><td>{integer.format(row.previous.net)}</td><td><b>{integer.format(row.current.net)}</b></td><td><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></td></tr>)}</tbody></table></div>
+            </section>
+          </div>
+        </>}
       </section>
 
       <section className="section shop-performance-section shell">

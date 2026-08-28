@@ -1,4 +1,5 @@
 import fallbackJson from "./dashboard-data.json";
+import { parseModelSalesTable, type ModelSale } from "./model-sales";
 
 export type DataRow = {
   brand?: string;
@@ -22,6 +23,7 @@ export type DailySale = {
   qty: number;
   net: number;
 };
+export type { ModelSale } from "./model-sales";
 export type DashboardData = {
   area: string;
   month: string;
@@ -30,10 +32,11 @@ export type DashboardData = {
   brands: BrandRow[];
   shops: ShopRow[];
   sales: DailySale[];
+  modelSales: ModelSale[];
   comparison?: unknown;
 };
 
-function fallbackSales(data: Omit<DashboardData, "sales">): DailySale[] {
+function fallbackSales(data: Omit<DashboardData, "sales" | "modelSales">): DailySale[] {
   const [year, month] = data.latest.split("-").map(Number);
   const currentPrefix = `${year}-${String(month).padStart(2, "0")}`;
   const previousDate = new Date(Date.UTC(year, month - 2, 1));
@@ -59,8 +62,8 @@ function fallbackSales(data: Omit<DashboardData, "sales">): DailySale[] {
   });
 }
 
-const fallbackBase = fallbackJson as Omit<DashboardData, "sales">;
-export const fallbackData: DashboardData = { ...fallbackBase, sales: fallbackSales(fallbackBase) };
+const fallbackBase = fallbackJson as Omit<DashboardData, "sales" | "modelSales">;
+export const fallbackData: DashboardData = { ...fallbackBase, sales: fallbackSales(fallbackBase), modelSales: [] };
 
 const GOOGLE_SHEET_ID = "1qsVJk2DbXW8EInVK7gFIOtCB9-5GdVp5vJhU4hPK29k";
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -178,7 +181,14 @@ async function fetchSheet(sheetName: string): Promise<string[][]> {
 }
 
 export async function loadGoogleSheetData(): Promise<DashboardData> {
-  const [salesTable, targetTable] = await Promise.all([fetchSheet("Daily_Sales"), fetchSheet("Target_Brand")]);
+  const [salesTable, targetTable, modelTable] = await Promise.all([
+    fetchSheet("Daily_Sales"),
+    fetchSheet("Target_Brand"),
+    fetchSheet("Daily_Sales_Model").catch((error) => {
+      console.warn("Daily_Sales_Model could not be loaded; Brand Monitor will remain available.", error);
+      return [] as string[][];
+    }),
+  ]);
   if (salesTable.length < 2 || targetTable.length < 2) throw new Error("Google Sheet has no data rows");
 
   const salesHeader = salesTable[0];
@@ -207,6 +217,7 @@ export async function loadGoogleSheetData(): Promise<DashboardData> {
     qty: numeric(row[salesColumns.qty]),
     net: numeric(row[salesColumns.net]),
   })).filter((row) => row.date && row.code && row.brand);
+  const modelSales = modelTable.length > 1 ? parseModelSalesTable(modelTable) : [];
   if (!salesRows.length) throw new Error("Google Sheet has no valid Daily_Sales rows");
 
   const latest = salesRows.map((row) => row.date).sort().at(-1)!;
@@ -284,6 +295,7 @@ export async function loadGoogleSheetData(): Promise<DashboardData> {
     brands,
     shops,
     sales: salesRows,
+    modelSales,
     comparison: fallbackData.comparison,
   };
 }
