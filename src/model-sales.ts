@@ -8,6 +8,40 @@ export type ModelSale = {
   net: number;
 };
 
+export type ModelSaleSummary = {
+  key: string;
+  brand: string;
+  model: string;
+  qty: number;
+  net: number;
+};
+
+export function summarizeModelSales(sales: ModelSale[]): ModelSaleSummary[] {
+  const grouped = new Map<string, ModelSaleSummary>();
+  for (const sale of sales) {
+    const key = modelSaleKey(sale);
+    const current = grouped.get(key);
+    if (current) {
+      current.qty += sale.qty;
+      current.net += sale.net;
+    } else {
+      grouped.set(key, { key, brand: sale.brand, model: sale.model, qty: sale.qty, net: sale.net });
+    }
+  }
+  return [...grouped.values()];
+}
+
+export function topModelsByBrand(sales: ModelSale[], metric: "qty" | "net"): ModelSaleSummary[] {
+  const top = new Map<string, ModelSaleSummary>();
+  for (const row of summarizeModelSales(sales)) {
+    const current = top.get(row.brand);
+    if (!current || row[metric] > current[metric] || (row[metric] === current[metric] && row.model.localeCompare(current.model) < 0)) {
+      top.set(row.brand, row);
+    }
+  }
+  return [...top.values()].sort((a, b) => b[metric] - a[metric] || a.brand.localeCompare(b.brand));
+}
+
 export type ModelShopInsight = {
   label: "No Sales MTD" | "No Sales Week" | "New Sales" | "Growth" | "Decline" | "Stable";
   action: string;
