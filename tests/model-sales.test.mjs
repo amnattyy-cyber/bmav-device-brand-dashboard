@@ -8,7 +8,19 @@ const javascript = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(javascript).toString("base64")}`;
-const { modelSaleKey, modelShopInsight, parseCsv, parseModelSalesTable } = await import(moduleUrl);
+const { modelSaleKey, modelShopInsight, parseCsv, parseModelSalesTable, summarizeModelSales, topModelsByBrand } = await import(moduleUrl);
+
+test("summarizes daily model sales and selects the top model for each brand", () => {
+  const sales = [
+    { date: "2026-08-27", code: "S001", shop: "Shop A", brand: "HONOR", model: "MODEL A", qty: 1, net: 3000 },
+    { date: "2026-08-27", code: "S001", shop: "Shop A", brand: "HONOR", model: "MODEL A", qty: 2, net: 6000 },
+    { date: "2026-08-27", code: "S001", shop: "Shop A", brand: "HONOR", model: "MODEL B", qty: 2, net: 12000 },
+    { date: "2026-08-27", code: "S001", shop: "Shop A", brand: "SAMSUNG", model: "MODEL C", qty: 1, net: 5000 },
+  ];
+  assert.deepEqual(summarizeModelSales(sales).find((row) => row.model === "MODEL A"), { key: "HONOR|MODEL A", brand: "HONOR", model: "MODEL A", qty: 3, net: 9000 });
+  assert.equal(topModelsByBrand(sales, "qty")[0].model, "MODEL A");
+  assert.equal(topModelsByBrand(sales, "net").find((row) => row.brand === "HONOR").model, "MODEL B");
+});
 
 test("classifies each shop into an actionable model-sales status", () => {
   assert.deepEqual(modelShopInsight(0, 0, 0), { label: "No Sales MTD", action: "เร่งเปิดยอดรุ่นนี้", tone: "flat" });
