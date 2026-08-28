@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DailySale, type DataRow } from "./google-sheet-data";
-import { modelSaleKey } from "./model-sales";
+import { modelSaleKey, modelShopInsight } from "./model-sales";
 import { comparableWeekPeriod, previousWeekId, shortDateRange, weekDataStatus, weekIndexForDate, weekRanges, wowChangeRate } from "./wow-periods";
 
 type Metric = "net" | "qty";
@@ -470,6 +470,18 @@ export default function Home() {
         };
       })
       .sort((a, b) => b.current[modelSort] - a.current[modelSort] || b.mtd[modelSort] - a.mtd[modelSort] || a.shop.localeCompare(b.shop));
+    const branchRows = shopRows.map((row, index) => ({
+      ...row,
+      rank: index + 1,
+      insight: modelShopInsight(row.current[modelSort], row.previous[modelSort], row.mtd[modelSort]),
+    }));
+    const topShop = branchRows.find((row) => row.current[modelSort] > 0) ?? branchRows[0] ?? null;
+    const branchSummary = {
+      topShop,
+      growth: branchRows.filter((row) => row.insight.tone === "growth").length,
+      decline: branchRows.filter((row) => row.insight.tone === "decline").length,
+      noSales: branchRows.filter((row) => row.current.qty === 0 && row.current.net === 0).length,
+    };
     const trend = Array.from({ length: selectedDay }, (_, index) => {
       const date = formatDate(index + 1);
       return { day: index + 1, ...salesSnapshot(activeSales, date, date) };
@@ -487,7 +499,8 @@ export default function Home() {
       previous,
       wowQty: wowChangeRate(current.qty, previous.qty),
       wowNet: wowChangeRate(current.net, previous.net),
-      shopRows,
+      shopRows: branchRows,
+      branchSummary,
       trend,
       sellingShops: shopRows.filter((row) => row.mtd.qty > 0 || row.mtd.net > 0).length,
       totalShops: shopRows.length,
@@ -759,6 +772,20 @@ export default function Home() {
               <div className="model-shop-table-wrap"><table className="model-shop-table"><thead><tr><th>Shop</th><th>Daily<br />QTY</th><th>Daily<br />Net</th><th>{modelPerformance.previousWeek}<br />QTY</th><th>{modelPerformance.range.id}<br />QTY</th><th>%WoW<br />QTY</th><th>{modelPerformance.previousWeek}<br />Net</th><th>{modelPerformance.range.id}<br />Net</th><th>%WoW<br />Net</th></tr></thead><tbody>{modelPerformance.shopRows.map((row) => <tr key={row.code}><th><strong>{row.shop}</strong><small>{row.code}{row.mtd.qty === 0 && row.mtd.net === 0 ? " · No Sales" : ""}</small></th><td>{integer.format(row.daily.qty)}</td><td>{integer.format(row.daily.net)}</td><td>{integer.format(row.previous.qty)}</td><td><b>{integer.format(row.current.qty)}</b></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span></td><td>{integer.format(row.previous.net)}</td><td><b>{integer.format(row.current.net)}</b></td><td><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></td></tr>)}</tbody></table></div>
             </section>
           </div>
+
+          <section className="model-branch-analysis-card" aria-labelledby="model-branch-analysis-title">
+            <header><div><span>BRANCH ANALYSIS · 15 SHOPS</span><h3 id="model-branch-analysis-title">วิเคราะห์ Performance รายสาขา</h3></div><p>{modelPerformance.active?.model ?? "เลือก Model"} • เรียงตาม {modelSort === "net" ? "Net Amount" : "QTY"} {modelPerformance.range.id} • แสดงครบทุกสาขา</p></header>
+            <div className="model-branch-summary">
+              <article><span>Top Shop · {modelPerformance.range.id}</span><strong>{modelPerformance.branchSummary.topShop?.shop ?? "—"}</strong><small>{modelSort === "net" ? `฿${integer.format(modelPerformance.branchSummary.topShop?.current.net ?? 0)}` : `${integer.format(modelPerformance.branchSummary.topShop?.current.qty ?? 0)} เครื่อง`}</small></article>
+              <article className="growth"><span>Growth / New Sales</span><strong>{modelPerformance.branchSummary.growth}</strong><small>สาขา</small></article>
+              <article className="decline"><span>Decline / No Sales Week</span><strong>{modelPerformance.branchSummary.decline}</strong><small>สาขา</small></article>
+              <article className="flat"><span>No Sales สัปดาห์นี้</span><strong>{modelPerformance.branchSummary.noSales}</strong><small>จาก {modelPerformance.totalShops} สาขา</small></article>
+            </div>
+            <div className="model-branch-analysis-wrap"><table className="model-branch-analysis-table">
+              <thead><tr><th>Rank</th><th>Shop</th><th>Daily<br /><small>QTY / Net</small></th><th>{modelPerformance.range.id}<br /><small>QTY / Net</small></th><th>%WoW<br /><small>QTY / Net</small></th><th>MTD<br /><small>QTY / Net</small></th><th>วิเคราะห์ / Action</th></tr></thead>
+              <tbody>{modelPerformance.shopRows.map((row) => <tr key={row.code}><td><b>#{row.rank}</b></td><th><strong>{row.shop}</strong><small>{row.code}</small></th><td><b>{integer.format(row.daily.qty)}</b><small>฿{integer.format(row.daily.net)}</small></td><td><b>{integer.format(row.current.qty)}</b><small>฿{integer.format(row.current.net)}</small></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span><small><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></small></td><td><b>{integer.format(row.mtd.qty)}</b><small>฿{integer.format(row.mtd.net)}</small></td><td><span className={`model-branch-insight ${row.insight.tone}`}><b>{row.insight.label}</b><small>{row.insight.action}</small></span></td></tr>)}</tbody>
+            </table></div>
+          </section>
         </>}
       </section>
 

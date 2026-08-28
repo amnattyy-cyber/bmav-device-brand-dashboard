@@ -8,6 +8,21 @@ export type ModelSale = {
   net: number;
 };
 
+export type ModelShopInsight = {
+  label: "No Sales MTD" | "No Sales Week" | "New Sales" | "Growth" | "Decline" | "Stable";
+  action: string;
+  tone: "growth" | "decline" | "flat";
+};
+
+export function modelShopInsight(current: number, previous: number, mtd: number): ModelShopInsight {
+  if (current === 0 && mtd === 0) return { label: "No Sales MTD", action: "เร่งเปิดยอดรุ่นนี้", tone: "flat" };
+  if (current === 0) return { label: "No Sales Week", action: "เร่งกลับมาทำยอด", tone: "decline" };
+  if (previous === 0) return { label: "New Sales", action: "ต่อยอดสาขาเริ่มขาย", tone: "growth" };
+  if (current > previous) return { label: "Growth", action: "รักษาแรงขาย", tone: "growth" };
+  if (current < previous) return { label: "Decline", action: "เร่งกู้ยอด WoW", tone: "decline" };
+  return { label: "Stable", action: "ติดตามและเพิ่มยอด", tone: "flat" };
+}
+
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
