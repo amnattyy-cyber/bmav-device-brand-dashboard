@@ -67,6 +67,11 @@ export const fallbackData: DashboardData = { ...fallbackBase, sales: fallbackSal
 
 const GOOGLE_SHEET_ID = "1qsVJk2DbXW8EInVK7gFIOtCB9-5GdVp5vJhU4hPK29k";
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const SHEET_GIDS: Record<string, string> = {
+  Daily_Sales: "892853742",
+  Target_Brand: "1609472763",
+  Daily_Sales_Model: "2126764710",
+};
 
 export const sheetRefreshInterval = REFRESH_INTERVAL_MS;
 
@@ -144,9 +149,9 @@ async function fetchSheetPage(sheetName: string, tableQuery?: string): Promise<s
   const callbackName = `bmavSheet_${sheetName}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const query = new URLSearchParams({
     tqx: `out:json;responseHandler:${callbackName}`,
-    sheet: sheetName,
     _: String(Date.now()),
   });
+  query.set("gid", SHEET_GIDS[sheetName] ?? "");
   if (tableQuery) query.set("tq", tableQuery);
   const callbackHost = window as unknown as Record<string, ((response: GvizResponse) => void) | undefined>;
 
