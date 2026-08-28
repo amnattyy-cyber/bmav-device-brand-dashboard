@@ -140,13 +140,14 @@ function combineRows(rows: DataRow[], days: number): DataRow {
   }), emptyRow(days));
 }
 
-async function fetchSheet(sheetName: string): Promise<string[][]> {
+async function fetchSheetPage(sheetName: string, tableQuery?: string): Promise<string[][]> {
   const callbackName = `bmavSheet_${sheetName}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const query = new URLSearchParams({
     tqx: `out:json;responseHandler:${callbackName}`,
     sheet: sheetName,
     _: String(Date.now()),
   });
+  if (tableQuery) query.set("tq", tableQuery);
   const callbackHost = window as unknown as Record<string, ((response: GvizResponse) => void) | undefined>;
 
   return new Promise((resolve, reject) => {
@@ -178,6 +179,24 @@ async function fetchSheet(sheetName: string): Promise<string[][]> {
     script.async = true;
     document.head.appendChild(script);
   });
+}
+
+async function fetchSheet(sheetName: string): Promise<string[][]> {
+  if (sheetName !== "Daily_Sales_Model") return fetchSheetPage(sheetName);
+
+  // Google can reject a large cross-origin JSONP response even though the
+  // same sheet remains available in HTML. Load model sales in smaller pages
+  // so the live dashboard stays reliable as new daily rows are appended.
+  const pageSize = 400;
+  const combined: string[][] = [];
+  for (let offset = 0; offset < 20_000; offset += pageSize) {
+    const page = await fetchSheetPage(sheetName, `limit ${pageSize} offset ${offset}`);
+    if (!combined.length) combined.push(page[0] ?? []);
+    const rows = page.slice(1);
+    combined.push(...rows);
+    if (rows.length < pageSize) break;
+  }
+  return combined;
 }
 
 export async function loadGoogleSheetData(): Promise<DashboardData> {
