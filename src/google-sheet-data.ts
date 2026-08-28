@@ -187,7 +187,7 @@ async function fetchSheet(sheetName: string): Promise<string[][]> {
   // Google can reject a large cross-origin JSONP response even though the
   // same sheet remains available in HTML. Load model sales in smaller pages
   // so the live dashboard stays reliable as new daily rows are appended.
-  const pageSize = 400;
+  const pageSize = 100;
   const combined: string[][] = [];
   for (let offset = 0; offset < 20_000; offset += pageSize) {
     const page = await fetchSheetPage(sheetName, `limit ${pageSize} offset ${offset}`);
