@@ -8,7 +8,15 @@ const javascript = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(javascript).toString("base64")}`;
-const { modelSaleKey, parseModelSalesTable } = await import(moduleUrl);
+const { modelSaleKey, parseCsv, parseModelSalesTable } = await import(moduleUrl);
+
+test("parses CSV fields containing commas, quotes, and line breaks", () => {
+  assert.deepEqual(parseCsv('A,B,C\r\n1,"Shop, Central","MODEL ""PLUS"""\r\n2,"Two\nLines",Done\r\n'), [
+    ["A", "B", "C"],
+    ["1", "Shop, Central", 'MODEL "PLUS"'],
+    ["2", "Two\nLines", "Done"],
+  ]);
+});
 
 test("parses the live Daily_Sales_Model header where Qty contains the model", () => {
   const rows = parseModelSalesTable([
