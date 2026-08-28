@@ -8,7 +8,16 @@ const javascript = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(javascript).toString("base64")}`;
-const { modelSaleKey, parseCsv, parseModelSalesTable } = await import(moduleUrl);
+const { modelSaleKey, modelShopInsight, parseCsv, parseModelSalesTable } = await import(moduleUrl);
+
+test("classifies each shop into an actionable model-sales status", () => {
+  assert.deepEqual(modelShopInsight(0, 0, 0), { label: "No Sales MTD", action: "เร่งเปิดยอดรุ่นนี้", tone: "flat" });
+  assert.deepEqual(modelShopInsight(0, 2, 5), { label: "No Sales Week", action: "เร่งกลับมาทำยอด", tone: "decline" });
+  assert.equal(modelShopInsight(2, 0, 2).label, "New Sales");
+  assert.equal(modelShopInsight(3, 2, 4).label, "Growth");
+  assert.equal(modelShopInsight(1, 2, 4).label, "Decline");
+  assert.equal(modelShopInsight(2, 2, 4).label, "Stable");
+});
 
 test("parses CSV fields containing commas, quotes, and line breaks", () => {
   assert.deepEqual(parseCsv('A,B,C\r\n1,"Shop, Central","MODEL ""PLUS"""\r\n2,"Two\nLines",Done\r\n'), [
