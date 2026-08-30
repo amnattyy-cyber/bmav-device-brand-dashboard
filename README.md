@@ -14,8 +14,8 @@ Public interactive dashboard for BMA V - Central device performance in August 20
 - Per-brand WoW badges alongside the existing MoM badges, responsive to the selected week, metric, and shop filter
 - Compact All Brand WoW table with equal-day QTY and Net Amount base/current values, differences, percentage changes, sorting, and a Grand Total row
 - Brand-colored Shop WoW table with one-brand selection, equal-day week labels, prorated QTY/Net targets, differences, WoW percentages, achievement colors, and every shop including No Target rows
-- Live `Daily_Sales_Model` analysis with Brand/model filters, Daily and MTD totals, equal-day QTY/Net WoW by Area, a selected-model daily trend, and a 15-shop WoW table that keeps No Sales branches visible
-- Branch Performance supports selecting and aggregating multiple models within one Brand, larger balanced table text, and a one-screen Capture Table mode
+- Live `Daily_Sales_Model` analysis with one shared Brand, multi-model, and multi-shop filter set across every Model Performance table, including aggregated Daily/MTD totals, equal-day QTY/Net WoW, daily trend, branch ranking, and shop-level sales
+- Every Model Performance table includes a one-screen `Capture Table` mode for Desktop and Mobile, with larger normal-view text and tighter balanced columns
 - Brand x Shop ranking matrix with the top 12 brands, Daily/MTD/Run Rate values, projected run-rate achievement, per-brand shop ranks, an unranked ALL Shop total, and a compact Capture View
 - Brand x Shop uses Brand-colored column headers and highlights the percentage in red when a shop has Target but no MTD sales
 - Shop Performance and Model x Area tables include shops with sales even when Target is zero, while shops with neither Target nor sales remain hidden
