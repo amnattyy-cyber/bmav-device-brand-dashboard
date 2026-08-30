@@ -93,6 +93,9 @@ export default function Home() {
   const [matrixRanking, setMatrixRanking] = useState<MatrixRanking>("rank");
   const [matrixSortBrand, setMatrixSortBrand] = useState("ALL");
   const [matrixCapture, setMatrixCapture] = useState(false);
+  const [branchBrand, setBranchBrand] = useState("SAMSUNG");
+  const [branchSelectedModels, setBranchSelectedModels] = useState<string[]>([]);
+  const [branchCapture, setBranchCapture] = useState(false);
   const previousLatestDate = useRef(fallbackData.latest);
   const latestDay = Number(data.latest.slice(-2));
   const monthPrefix = data.latest.slice(0, 7);
@@ -129,13 +132,16 @@ export default function Home() {
   }, [data.latest, latestDay]);
 
   useEffect(() => {
-    if (!matrixCapture) return;
+    if (!matrixCapture && !branchCapture) return;
     const exitCapture = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMatrixCapture(false);
+      if (event.key === "Escape") {
+        setMatrixCapture(false);
+        setBranchCapture(false);
+      }
     };
     window.addEventListener("keydown", exitCapture);
     return () => window.removeEventListener("keydown", exitCapture);
-  }, [matrixCapture]);
+  }, [branchCapture, matrixCapture]);
 
   const shopOptions = useMemo(() => {
     const rows = (selectedBrand === "ALL" ? data.shops : data.shops.filter((row) => row.brand === selectedBrand))
@@ -515,6 +521,75 @@ export default function Home() {
     };
   }, [data.latest, data.modelSales, data.sales, data.shops, formatDate, modelBrand, modelQuery, modelSort, monthPrefix, selectedDay, selectedModelKey, selectedShops, selectedWeek]);
 
+  const branchModelOptions = useMemo(() => summarizeModelSales(data.modelSales.filter((sale) => sale.brand === branchBrand))
+    .sort((a, b) => b[modelSort] - a[modelSort] || a.model.localeCompare(b.model)), [branchBrand, data.modelSales, modelSort]);
+
+  useEffect(() => {
+    const available = new Set(branchModelOptions.map((row) => row.key));
+    setBranchSelectedModels((current) => current.filter((key) => available.has(key)));
+  }, [branchModelOptions]);
+
+  const branchModelPerformance = useMemo(() => {
+    const range = weekRanges[selectedWeek];
+    const period = comparableWeekPeriod(range, data.latest);
+    const selectedDate = formatDate(selectedDay);
+    const activeKeys = new Set(branchSelectedModels.length ? branchSelectedModels : branchModelOptions.map((row) => row.key));
+    const scopedSales = data.modelSales.filter((sale) => sale.brand === branchBrand && activeKeys.has(modelSaleKey(sale)) && (selectedShops.length === 0 || selectedShops.includes(sale.code)));
+    const shopsByCode = new Map<string, string>();
+    data.shops.forEach((row) => shopsByCode.set(row.code, row.shop));
+    data.sales.forEach((row) => shopsByCode.set(row.code, row.shop || shopsByCode.get(row.code) || row.code));
+    data.modelSales.forEach((row) => shopsByCode.set(row.code, row.shop || shopsByCode.get(row.code) || row.code));
+    const rows = [...shopsByCode.entries()]
+      .filter(([code]) => selectedShops.length === 0 || selectedShops.includes(code))
+      .map(([code, shop]) => {
+        const sales = scopedSales.filter((sale) => sale.code === code);
+        const daily = salesSnapshot(sales, selectedDate, selectedDate);
+        const mtd = salesSnapshot(sales, `${monthPrefix}-01`, selectedDate);
+        const current = salesSnapshot(sales, period.currentStart, period.currentEnd);
+        const previous = salesSnapshot(sales, period.baseStart, period.baseEnd);
+        return {
+          code,
+          shop,
+          daily,
+          mtd,
+          current,
+          previous,
+          wowQty: wowChangeRate(current.qty, previous.qty),
+          wowNet: wowChangeRate(current.net, previous.net),
+        };
+      })
+      .sort((a, b) => b.current[modelSort] - a.current[modelSort] || b.mtd[modelSort] - a.mtd[modelSort] || a.shop.localeCompare(b.shop))
+      .map((row, index) => ({
+        ...row,
+        rank: index + 1,
+        insight: modelShopInsight(row.current[modelSort], row.previous[modelSort], row.mtd[modelSort]),
+      }));
+    const topShop = rows.find((row) => row.current[modelSort] > 0) ?? rows[0] ?? null;
+    return {
+      range,
+      period,
+      previousWeek: previousWeekId(range.id),
+      rows,
+      totalShops: rows.length,
+      summary: {
+        topShop,
+        growth: rows.filter((row) => row.insight.tone === "growth").length,
+        decline: rows.filter((row) => row.insight.tone === "decline").length,
+        noSales: rows.filter((row) => row.current.qty === 0 && row.current.net === 0).length,
+      },
+    };
+  }, [branchBrand, branchModelOptions, branchSelectedModels, data.latest, data.modelSales, data.sales, data.shops, formatDate, modelSort, monthPrefix, selectedDay, selectedShops, selectedWeek]);
+
+  const branchModelLabel = branchSelectedModels.length === 0
+    ? `ทุกรุ่นใน ${branchBrand}`
+    : branchSelectedModels.length === 1
+      ? branchModelOptions.find((row) => row.key === branchSelectedModels[0])?.model ?? "1 รุ่นที่เลือก"
+      : `${branchSelectedModels.length} รุ่นที่เลือก`;
+
+  const toggleBranchModel = (key: string) => {
+    setBranchSelectedModels((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
+  };
+
   const shopModelSales = useMemo(() => {
     const selectedDate = formatDate(selectedDay);
     const selectedCodes = selectedShops.length ? new Set(selectedShops) : new Set(modelShopOptions.map(([code]) => code));
@@ -625,13 +700,28 @@ export default function Home() {
   const toggleMatrixCapture = () => {
     setMatrixCapture((current) => {
       const next = !current;
-      if (next) window.requestAnimationFrame(() => document.getElementById("model-area-title")?.scrollIntoView({ block: "start" }));
+      if (next) {
+        setBranchCapture(false);
+        window.requestAnimationFrame(() => document.getElementById("model-area-title")?.scrollIntoView({ block: "start" }));
+      }
+      return next;
+    });
+  };
+
+  const toggleBranchCapture = () => {
+    setBranchCapture((current) => {
+      const next = !current;
+      if (next) {
+        setMatrixCapture(false);
+        document.querySelectorAll("details[open]").forEach((details) => details.removeAttribute("open"));
+        window.requestAnimationFrame(() => document.getElementById("model-branch-analysis-title")?.scrollIntoView({ block: "start" }));
+      }
       return next;
     });
   };
 
   return (
-    <main className={matrixCapture ? "matrix-capture-active" : ""}>
+    <main className={matrixCapture ? "matrix-capture-active" : branchCapture ? "branch-capture-active" : ""}>
       <section className="hero shell">
         <div className="hero-copy">
           <div className="eyebrow"><span className="live-dot" /> BMAV • DEVICE PERFORMANCE</div>
@@ -800,17 +890,24 @@ export default function Home() {
             </section>
           </div>
 
-          <section className="model-branch-analysis-card" aria-labelledby="model-branch-analysis-title">
-            <header><div><span>BRANCH ANALYSIS · 15 SHOPS</span><h3 id="model-branch-analysis-title">วิเคราะห์ Performance รายสาขา</h3></div><p>{modelPerformance.active?.model ?? "เลือก Model"} • เรียงตาม {modelSort === "net" ? "Net Amount" : "QTY"} {modelPerformance.range.id} • แสดงครบทุกสาขา</p></header>
+          <section className={`model-branch-analysis-card ${branchCapture ? "branch-capture-mode" : ""}`} aria-labelledby="model-branch-analysis-title">
+            <header>
+              <div><span>BRANCH ANALYSIS · {branchModelPerformance.totalShops} SHOPS</span><h3 id="model-branch-analysis-title">วิเคราะห์ Performance รายสาขา</h3><p>{branchModelLabel} • เรียงตาม {modelSort === "net" ? "Net Amount" : "QTY"} {branchModelPerformance.range.id} • แสดงครบทุกสาขา</p></div>
+              <div className="branch-analysis-actions">
+                <label>Brand<select value={branchBrand} onChange={(event) => { setBranchBrand(event.target.value); setBranchSelectedModels([]); }}>{modelPerformance.brandOptions.map((brand) => <option key={brand} value={brand}>{brand}</option>)}</select></label>
+                <div className="branch-model-filter"><span>เลือกรุ่น (เลือกได้หลายรุ่น)</span><details className="shop-multiselect branch-model-multiselect"><summary aria-label="เลือกรุ่นสำหรับวิเคราะห์ Performance รายสาขา"><span>{branchModelLabel}</span><b aria-hidden="true">⌄</b></summary><div className="shop-menu branch-model-menu"><label className="shop-option all-shops"><input type="checkbox" checked={branchSelectedModels.length === 0} onChange={() => setBranchSelectedModels([])} /><span>ทุกรุ่นใน {branchBrand}</span></label><div className="shop-option-list">{branchModelOptions.map((row) => <label className="shop-option" key={row.key}><input type="checkbox" checked={branchSelectedModels.includes(row.key)} onChange={() => toggleBranchModel(row.key)} /><span>{row.model}</span></label>)}</div></div></details></div>
+                <button className={`capture-view-button ${branchCapture ? "active" : ""}`} type="button" aria-pressed={branchCapture} onClick={toggleBranchCapture}><span aria-hidden="true">{branchCapture ? "×" : "▣"}</span>{branchCapture ? "ออกจาก Capture" : "Capture Table"}</button>
+              </div>
+            </header>
             <div className="model-branch-summary">
-              <article><span>Top Shop · {modelPerformance.range.id}</span><strong>{modelPerformance.branchSummary.topShop?.shop ?? "—"}</strong><small>{modelSort === "net" ? `฿${integer.format(modelPerformance.branchSummary.topShop?.current.net ?? 0)}` : `${integer.format(modelPerformance.branchSummary.topShop?.current.qty ?? 0)} เครื่อง`}</small></article>
-              <article className="growth"><span>Growth / New Sales</span><strong>{modelPerformance.branchSummary.growth}</strong><small>สาขา</small></article>
-              <article className="decline"><span>Decline / No Sales Week</span><strong>{modelPerformance.branchSummary.decline}</strong><small>สาขา</small></article>
-              <article className="flat"><span>No Sales สัปดาห์นี้</span><strong>{modelPerformance.branchSummary.noSales}</strong><small>จาก {modelPerformance.totalShops} สาขา</small></article>
+              <article><span>Top Shop · {branchModelPerformance.range.id}</span><strong>{branchModelPerformance.summary.topShop?.shop ?? "—"}</strong><small>{modelSort === "net" ? `฿${integer.format(branchModelPerformance.summary.topShop?.current.net ?? 0)}` : `${integer.format(branchModelPerformance.summary.topShop?.current.qty ?? 0)} เครื่อง`}</small></article>
+              <article className="growth"><span>Growth / New Sales</span><strong>{branchModelPerformance.summary.growth}</strong><small>สาขา</small></article>
+              <article className="decline"><span>Decline / No Sales Week</span><strong>{branchModelPerformance.summary.decline}</strong><small>สาขา</small></article>
+              <article className="flat"><span>No Sales สัปดาห์นี้</span><strong>{branchModelPerformance.summary.noSales}</strong><small>จาก {branchModelPerformance.totalShops} สาขา</small></article>
             </div>
             <div className="model-branch-analysis-wrap"><table className="model-branch-analysis-table">
-              <thead><tr><th>Rank</th><th>Shop</th><th>Daily<br /><small>QTY / Net</small></th><th>{modelPerformance.range.id}<br /><small>QTY / Net</small></th><th>%WoW<br /><small>QTY / Net</small></th><th>MTD<br /><small>QTY / Net</small></th><th>วิเคราะห์ / Action</th></tr></thead>
-              <tbody>{modelPerformance.shopRows.map((row) => <tr key={row.code}><td><b>#{row.rank}</b></td><th><strong>{row.shop}</strong><small>{row.code}</small></th><td><b>{integer.format(row.daily.qty)}</b><small>฿{integer.format(row.daily.net)}</small></td><td><b>{integer.format(row.current.qty)}</b><small>฿{integer.format(row.current.net)}</small></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span><small><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></small></td><td><b>{integer.format(row.mtd.qty)}</b><small>฿{integer.format(row.mtd.net)}</small></td><td><span className={`model-branch-insight ${row.insight.tone}`}><b>{row.insight.label}</b><small>{row.insight.action}</small></span></td></tr>)}</tbody>
+              <thead><tr><th>Rank</th><th>Shop</th><th>Daily<br /><small>QTY / Net</small></th><th>{branchModelPerformance.range.id}<br /><small>QTY / Net</small></th><th>%WoW<br /><small>QTY / Net</small></th><th>MTD<br /><small>QTY / Net</small></th><th>วิเคราะห์ / Action</th></tr></thead>
+              <tbody>{branchModelPerformance.rows.map((row) => <tr key={row.code}><td><b>#{row.rank}</b></td><th><strong>{row.shop}</strong><small>{row.code}</small></th><td><b>{integer.format(row.daily.qty)}</b><small>฿{integer.format(row.daily.net)}</small></td><td><b>{integer.format(row.current.qty)}</b><small>฿{integer.format(row.current.net)}</small></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span><small><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></small></td><td><b>{integer.format(row.mtd.qty)}</b><small>฿{integer.format(row.mtd.net)}</small></td><td><span className={`model-branch-insight ${row.insight.tone}`}><b>{row.insight.label}</b><small>{row.insight.action}</small></span></td></tr>)}</tbody>
             </table></div>
           </section>
 
@@ -895,3 +992,4 @@ export default function Home() {
     </main>
   );
 }
+
