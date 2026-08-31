@@ -45,6 +45,18 @@ const salesSnapshot = (sales: DailySale[], start: string, end: string | null): W
     ? { net: total.net + sale.net, qty: total.qty + sale.qty }
     : total, { net: 0, qty: 0 });
 };
+const shiftIsoDate = (date: string, days: number) => {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+};
+const isoDateRange = (start: string, end: string | null) => {
+  if (!end || end < start) return [];
+  const dates: string[] = [];
+  for (let date = start; date <= end; date = shiftIsoDate(date, 1)) dates.push(date);
+  return dates;
+};
+const compactDate = (date: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(`${date}T00:00:00Z`));
 
 const emptyRow = (): DataRow => ({ targetQty: 0, targetNet: 0, dailyQty: Array(31).fill(0), dailyNet: Array(31).fill(0), previousDailyQty: Array(31).fill(0), previousDailyNet: Array(31).fill(0) });
 const combineRows = (rows: DataRow[]): DataRow => rows.reduce((total, row) => ({
@@ -85,6 +97,7 @@ export default function Home() {
   const [modelBrand, setModelBrand] = useState("SAMSUNG");
   const [modelQuery, setModelQuery] = useState("");
   const [selectedModelKeys, setSelectedModelKeys] = useState<string[]>([]);
+  const [selectedModelDates, setSelectedModelDates] = useState<string[]>([fallbackData.latest]);
   const [modelSort, setModelSort] = useState<Metric>("net");
   const [viewMode, setViewMode] = useState<ViewMode>("mtd");
   const [selectedBrand, setSelectedBrand] = useState("ALL");
@@ -525,26 +538,75 @@ export default function Home() {
     };
   }, [data.latest, data.modelSales, data.sales, data.shops, formatDate, modelBrand, modelQuery, modelSort, monthPrefix, selectedDay, selectedModelKeys, selectedShops, selectedWeek]);
 
+  const modelSalesDateOptions = useMemo(() => isoDateRange(modelPerformance.period.currentStart, modelPerformance.period.currentEnd), [modelPerformance.period.currentEnd, modelPerformance.period.currentStart]);
+
+  useEffect(() => {
+    setSelectedModelDates((current) => {
+      if (current.length === 0) return current;
+      const available = current.filter((date) => modelSalesDateOptions.includes(date));
+      if (available.length) return available;
+      const selectedDate = formatDate(selectedDay);
+      return modelSalesDateOptions.includes(selectedDate) ? [selectedDate] : modelSalesDateOptions.slice(-1);
+    });
+  }, [formatDate, modelSalesDateOptions, selectedDay]);
+
+  const activeModelSalesDates = useMemo(() => {
+    const available = selectedModelDates.filter((date) => modelSalesDateOptions.includes(date));
+    if (available.length) return available.sort();
+    return selectedModelDates.length === 0 ? modelSalesDateOptions : modelSalesDateOptions.slice(-1);
+  }, [modelSalesDateOptions, selectedModelDates]);
+  const modelSalesDateLabel = activeModelSalesDates.length === modelSalesDateOptions.length
+    ? `${modelPerformance.range.id} · ${activeModelSalesDates.length} วัน`
+    : activeModelSalesDates.length === 1
+      ? compactDate(activeModelSalesDates[0])
+      : `${activeModelSalesDates.length} วันที่เลือก`;
+
+  const toggleModelSalesDate = (date: string) => {
+    setSelectedModelDates((current) => current.includes(date) ? current.filter((item) => item !== date) : [...current, date]);
+  };
+
   const shopModelSales = useMemo(() => {
-    const selectedDate = formatDate(selectedDay);
     const selectedCodes = selectedShops.length ? new Set(selectedShops) : new Set(modelShopOptions.map(([code]) => code));
     const activeKeys = new Set(selectedModelKeys.length ? selectedModelKeys : modelPerformance.modelOptions.map((row) => row.key));
     const inScope = data.modelSales.filter((sale) => selectedCodes.has(sale.code) && sale.brand === modelBrand && activeKeys.has(modelSaleKey(sale)));
-    const dailySales = inScope.filter((sale) => sale.date === selectedDate);
-    const mtdSales = inScope.filter((sale) => sale.date >= `${monthPrefix}-01` && sale.date <= selectedDate);
+    const currentDateSet = new Set(activeModelSalesDates);
+    const previousDates = activeModelSalesDates.map((date) => shiftIsoDate(date, -7));
+    const previousDateSet = new Set(previousDates);
+    const asOfDate = activeModelSalesDates.at(-1) ?? formatDate(selectedDay);
+    const asOfMonth = asOfDate.slice(0, 7);
+    const currentSales = inScope.filter((sale) => currentDateSet.has(sale.date));
+    const previousSales = inScope.filter((sale) => previousDateSet.has(sale.date));
+    const mtdSales = inScope.filter((sale) => sale.date >= `${asOfMonth}-01` && sale.date <= asOfDate);
+    const currentByKey = new Map(summarizeModelSales(currentSales).map((row) => [row.key, row]));
+    const previousByKey = new Map(summarizeModelSales(previousSales).map((row) => [row.key, row]));
     const mtdByKey = new Map(summarizeModelSales(mtdSales).map((row) => [row.key, row]));
-    const dailyRows = summarizeModelSales(dailySales)
-      .map((row) => ({ ...row, mtd: mtdByKey.get(row.key) ?? { qty: 0, net: 0 } }))
-      .sort((a, b) => b[modelSort] - a[modelSort] || b.mtd[modelSort] - a.mtd[modelSort] || a.model.localeCompare(b.model));
-    const dailyByKey = new Map(dailyRows.map((row) => [row.key, row]));
+    const rowMetrics = (key: string) => {
+      const current = currentByKey.get(key) ?? { qty: 0, net: 0 };
+      const previous = previousByKey.get(key) ?? { qty: 0, net: 0 };
+      const mtd = mtdByKey.get(key) ?? { qty: 0, net: 0 };
+      return { current, previous, mtd, wowQty: wowChangeRate(current.qty, previous.qty), wowNet: wowChangeRate(current.net, previous.net) };
+    };
+    const dailyRows = summarizeModelSales(currentSales)
+      .map((row) => ({ ...row, ...rowMetrics(row.key) }))
+      .sort((a, b) => b.current[modelSort] - a.current[modelSort] || b.mtd[modelSort] - a.mtd[modelSort] || a.model.localeCompare(b.model));
     const topModels = summarizeModelSales(mtdSales)
-      .map((row) => ({ ...row, daily: dailyByKey.get(row.key) ?? { qty: 0, net: 0 } }))
-      .sort((a, b) => b[modelSort] - a[modelSort] || a.model.localeCompare(b.model));
-    const totals = dailyRows.reduce((total, row) => ({ qty: total.qty + row.qty, net: total.net + row.net }), { qty: 0, net: 0 });
+      .map((row) => ({ ...row, ...rowMetrics(row.key) }))
+      .sort((a, b) => b.current[modelSort] - a.current[modelSort] || b.mtd[modelSort] - a.mtd[modelSort] || a.model.localeCompare(b.model));
+    const totals = salesSnapshot(currentSales, activeModelSalesDates[0] ?? asOfDate, activeModelSalesDates.at(-1) ?? asOfDate);
+    const previousTotals = salesSnapshot(previousSales, previousDates[0] ?? asOfDate, previousDates.at(-1) ?? asOfDate);
     const selectedNames = modelShopOptions.filter(([code]) => selectedCodes.has(code)).map(([, name]) => name);
     const scopeLabel = selectedShops.length === 0 ? "ทุกสาขา" : selectedShops.length === 1 ? selectedNames[0] ?? "1 สาขา" : `${selectedShops.length} สาขาที่เลือก`;
-    return { dailyRows, topModels, totals, scopeLabel };
-  }, [data.modelSales, formatDate, modelBrand, modelPerformance.modelOptions, modelShopOptions, modelSort, monthPrefix, selectedDay, selectedModelKeys, selectedShops]);
+    return {
+      dailyRows,
+      topModels,
+      totals,
+      previousTotals,
+      wowQty: wowChangeRate(totals.qty, previousTotals.qty),
+      wowNet: wowChangeRate(totals.net, previousTotals.net),
+      scopeLabel,
+      previousWeek: modelPerformance.previousWeek,
+    };
+  }, [activeModelSalesDates, data.modelSales, formatDate, modelBrand, modelPerformance.modelOptions, modelPerformance.previousWeek, modelShopOptions, modelSort, selectedDay, selectedModelKeys, selectedShops]);
   const modelTrendMax = Math.max(...modelPerformance.trend.map((item) => item[modelSort]), 1);
   const modelColor = brandColors[modelBrand] ?? "#7c3aed";
   const modelSelectionLabel = selectedModelKeys.length === 0
@@ -869,21 +931,21 @@ export default function Home() {
 
           <section className="model-shop-sales-card" aria-labelledby="model-shop-sales-title">
             <header>
-              <div><span>SHOP × MODEL × DAILY</span><h3 id="model-shop-sales-title">ยอดขาย By Model รายสาขา</h3><p>เลือกสาขาและวันที่เพื่อดูรุ่นที่ขายจริง พร้อม Top Model แยกตาม Brand</p></div>
+              <div><span>SHOP × MODEL × MULTI-DATE</span><h3 id="model-shop-sales-title">ยอดขาย By Model รายสาขา</h3><p>เลือกหลายวันภายใน Week เพื่อรวมยอด และเทียบวันเดียวกันของสัปดาห์ก่อนแบบจำนวนวันเท่ากัน</p></div>
               <div className="model-shop-sales-controls">
                 <div className="shared-filter-note">{modelSelectionLabel}<small>{shopModelSales.scopeLabel}</small></div>
-                <label>Sales Date<select value={selectedDay} onChange={(event) => setSelectedDay(Number(event.target.value))}>{Array.from({ length: latestDay }, (_, index) => index + 1).map((day) => <option key={day} value={day}>{day} Aug 2026</option>)}</select></label>
+                <div className="model-sales-date-filter"><span>Sales Date (เลือกได้หลายวัน)</span><details className="shop-multiselect"><summary aria-label="เลือกหลายวันสำหรับยอดขาย By Model รายสาขา"><span>{modelSalesDateLabel}</span><b aria-hidden="true">⌄</b></summary><div className="shop-menu model-sales-date-menu"><label className="shop-option all-shops"><input type="checkbox" checked={selectedModelDates.length === 0} onChange={() => setSelectedModelDates([])} /><span>ทุกวันที่มีข้อมูลใน {modelPerformance.range.id}</span></label><div className="shop-option-list">{modelSalesDateOptions.map((date) => <label className="shop-option" key={date}><input type="checkbox" checked={selectedModelDates.includes(date)} onChange={() => toggleModelSalesDate(date)} /><span>{compactDate(date)} 2026</span></label>)}</div></div></details></div>
               </div>
             </header>
             <div className="model-shop-sales-summary">
               <article><span>Shop Scope</span><strong>{shopModelSales.scopeLabel}</strong><small>เชื่อมกับตัวกรองสาขาหลัก</small></article>
-              <article><span>Daily · {selectedDay} Aug</span><strong>{integer.format(shopModelSales.totals.qty)} เครื่อง</strong><small>Net ฿{integer.format(shopModelSales.totals.net)}</small></article>
-              <article><span>Models Sold</span><strong>{shopModelSales.dailyRows.length}</strong><small>รุ่นที่มียอดขายวันนี้</small></article>
-              <article><span>Selected Models MTD</span><strong>{shopModelSales.topModels.length}</strong><small>รุ่นที่มียอด MTD</small></article>
+              <article><span>{modelSalesDateLabel}</span><strong>{integer.format(shopModelSales.totals.qty)} เครื่อง</strong><small>Net ฿{integer.format(shopModelSales.totals.net)} • {shopModelSales.dailyRows.length} รุ่น</small></article>
+              <article><span>{shopModelSales.previousWeek} · วันตรงกัน</span><strong>{integer.format(shopModelSales.previousTotals.qty)} เครื่อง</strong><small>Net ฿{integer.format(shopModelSales.previousTotals.net)}</small></article>
+              <article><span>%WoW Qty / Net</span><strong><em className={`model-rate ${comparisonTone(shopModelSales.wowQty)}`}>{wowRateLabel(shopModelSales.wowQty)}</em><em className={`model-rate ${comparisonTone(shopModelSales.wowNet)}`}>{wowRateLabel(shopModelSales.wowNet)}</em></strong><small>เทียบวันตรงกันย้อนหลัง 7 วัน</small></article>
             </div>
             <div className="model-shop-sales-grid">
-              <section className={modelTableCapture === "top-models" ? "model-capture-target" : ""}><header><div><span>SELECTED MODELS</span><h4 id="model-top-models-title">อันดับรุ่นขายดี MTD</h4></div><div className="model-card-actions"><p>ถึง {selectedDay} Aug • เรียงตาม {modelSort === "net" ? "Net" : "Qty"}</p>{captureButton("top-models", "model-top-models-title")}</div></header><div className="model-shop-sales-table-wrap"><table className="model-top-brand-table"><thead><tr><th>Brand</th><th>Model</th><th>Daily<br />QTY</th><th>MTD<br />QTY</th><th>MTD Net</th></tr></thead><tbody>{shopModelSales.topModels.map((row) => <tr key={row.key} onClick={() => setSelectedModelKeys([row.key])}><td><span className="model-brand-pill" style={{ "--pill": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.brand}</span></td><th><strong>{row.model}</strong><small>คลิกเพื่อเลือกเฉพาะรุ่นนี้</small></th><td>{integer.format(row.daily.qty)}</td><td><b>{integer.format(row.qty)}</b></td><td><b>{integer.format(row.net)}</b></td></tr>)}</tbody></table></div></section>
-              <section className={modelTableCapture === "daily-sales" ? "model-capture-target" : ""}><header><div><span>DAILY MODEL SALES</span><h4 id="model-daily-sales-title">รุ่นที่ขายวันที่ {selectedDay} Aug</h4></div><div className="model-card-actions"><p>{shopModelSales.dailyRows.length ? `${shopModelSales.dailyRows.length} รุ่น` : "No Sales"}</p>{captureButton("daily-sales", "model-daily-sales-title")}</div></header><div className="model-shop-sales-table-wrap">{shopModelSales.dailyRows.length ? <table className="model-daily-sales-table"><thead><tr><th>Rank</th><th>Brand</th><th>Model</th><th>QTY</th><th>Net</th><th>MTD<br />QTY</th></tr></thead><tbody>{shopModelSales.dailyRows.map((row, index) => <tr key={row.key} onClick={() => setSelectedModelKeys([row.key])}><td><b>#{index + 1}</b></td><td><span className="model-brand-pill" style={{ "--pill": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.brand}</span></td><th><strong>{row.model}</strong><small>คลิกเพื่อเลือกเฉพาะรุ่นนี้</small></th><td><b>{integer.format(row.qty)}</b></td><td><b>{integer.format(row.net)}</b></td><td>{integer.format(row.mtd.qty)}</td></tr>)}</tbody></table> : <div className="model-daily-empty"><strong>No Sales</strong><span>ไม่พบยอดขาย By Model ของ {shopModelSales.scopeLabel} ในวันที่ {selectedDay} Aug</span></div>}</div></section>
+              <section className={modelTableCapture === "top-models" ? "model-capture-target" : ""}><header><div><span>SELECTED MODELS · WOW</span><h4 id="model-top-models-title">Performance รุ่นตามช่วงวันที่</h4></div><div className="model-card-actions"><p>{modelSalesDateLabel} • เรียงตาม {modelSort === "net" ? "Net" : "Qty"}</p>{captureButton("top-models", "model-top-models-title")}</div></header><div className="model-shop-sales-table-wrap"><table className="model-top-brand-table"><thead><tr><th>Brand</th><th>Model</th><th>วันที่เลือก<br /><small>QTY / Net</small></th><th>{shopModelSales.previousWeek}<br /><small>QTY / Net</small></th><th>%WoW<br /><small>QTY / Net</small></th><th>MTD<br /><small>QTY / Net</small></th></tr></thead><tbody>{shopModelSales.topModels.map((row) => <tr key={row.key} onClick={() => setSelectedModelKeys([row.key])}><td><span className="model-brand-pill" style={{ "--pill": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.brand}</span></td><th><strong>{row.model}</strong><small>คลิกเพื่อเลือกเฉพาะรุ่นนี้</small></th><td><b>{integer.format(row.current.qty)}</b><small>฿{integer.format(row.current.net)}</small></td><td><b>{integer.format(row.previous.qty)}</b><small>฿{integer.format(row.previous.net)}</small></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span><small><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></small></td><td><b>{integer.format(row.mtd.qty)}</b><small>฿{integer.format(row.mtd.net)}</small></td></tr>)}</tbody></table></div></section>
+              <section className={modelTableCapture === "daily-sales" ? "model-capture-target" : ""}><header><div><span>MULTI-DATE MODEL SALES · WOW</span><h4 id="model-daily-sales-title">รุ่นที่ขายในวันที่เลือก</h4></div><div className="model-card-actions"><p>{shopModelSales.dailyRows.length ? `${shopModelSales.dailyRows.length} รุ่น • ${modelSalesDateLabel}` : "No Sales"}</p>{captureButton("daily-sales", "model-daily-sales-title")}</div></header><div className="model-shop-sales-table-wrap">{shopModelSales.dailyRows.length ? <table className="model-daily-sales-table"><thead><tr><th>Rank</th><th>Brand</th><th>Model</th><th>วันที่เลือก<br /><small>QTY / Net</small></th><th>{shopModelSales.previousWeek}<br /><small>QTY / Net</small></th><th>%WoW<br /><small>QTY / Net</small></th><th>MTD<br /><small>QTY / Net</small></th></tr></thead><tbody>{shopModelSales.dailyRows.map((row, index) => <tr key={row.key} onClick={() => setSelectedModelKeys([row.key])}><td><b>#{index + 1}</b></td><td><span className="model-brand-pill" style={{ "--pill": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.brand}</span></td><th><strong>{row.model}</strong><small>คลิกเพื่อเลือกเฉพาะรุ่นนี้</small></th><td><b>{integer.format(row.current.qty)}</b><small>฿{integer.format(row.current.net)}</small></td><td><b>{integer.format(row.previous.qty)}</b><small>฿{integer.format(row.previous.net)}</small></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span><small><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></small></td><td><b>{integer.format(row.mtd.qty)}</b><small>฿{integer.format(row.mtd.net)}</small></td></tr>)}</tbody></table> : <div className="model-daily-empty"><strong>No Sales</strong><span>ไม่พบยอดขาย By Model ของ {shopModelSales.scopeLabel} ใน {modelSalesDateLabel}</span></div>}</div></section>
             </div>
           </section>
         </>}
@@ -948,4 +1010,3 @@ export default function Home() {
     </main>
   );
 }
-
