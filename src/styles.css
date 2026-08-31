@@ -190,6 +190,11 @@ footer { margin-top: 85px; border-top: 1px solid var(--line); min-height: 120px;
 .model-shared-filter .shop-multiselect summary { height: 36px; border-color: color-mix(in srgb, var(--model-brand) 24%, #dbe2ea); background: white; font-size: 10px; letter-spacing: normal; text-transform: none; }
 .model-multi-filter { grid-column: span 2; }
 .model-filter-menu { width: min(460px, 88vw); text-align: left; letter-spacing: normal; text-transform: none; }
+.model-shop-sales-controls { min-width: 440px; grid-template-columns: minmax(190px, 1fr) minmax(205px, 1.05fr); }
+.model-sales-date-filter { min-width: 0; display: grid; gap: 4px; position: relative; z-index: 20; color: var(--muted); font-size: 7.5px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+.model-sales-date-filter summary { height: 34px; border-color: color-mix(in srgb, var(--model-brand) 24%, #dbe2ea); background: white; font-size: 9px; letter-spacing: normal; text-transform: none; }
+.model-sales-date-menu { right: 0; left: auto; width: min(350px, 88vw); text-align: left; letter-spacing: normal; text-transform: none; }
+.model-sales-date-menu .shop-option-list { max-height: 250px; }
 .model-card-actions { display: flex; align-items: flex-end; justify-content: flex-end; gap: 10px; }
 .model-card-actions .capture-view-button { height: 32px; padding-inline: 10px; }
 .shared-filter-note { display: grid; align-content: center; gap: 3px; min-height: 34px; color: var(--model-brand); font-size: 10px; font-weight: 900; text-align: right; }
@@ -211,15 +216,22 @@ footer { margin-top: 85px; border-top: 1px solid var(--line); min-height: 120px;
 .model-shop-table thead th:first-child { width: 23%; }
 .model-shop-table tbody th strong { font-size: 10.8px; }
 .model-shop-table tbody th small { font-size: 8.3px; }
-.model-top-brand-table { min-width: 460px; }
-.model-daily-sales-table { min-width: 540px; }
+.model-top-brand-table { min-width: 690px; }
+.model-daily-sales-table { min-width: 780px; }
 .model-top-brand-table th, .model-top-brand-table td, .model-daily-sales-table th, .model-daily-sales-table td { height: 36px; padding: 4px 5px; font-size: 10.5px; }
 .model-top-brand-table thead th, .model-daily-sales-table thead th { height: 39px; font-size: 8.8px; }
 .model-top-brand-table thead th:nth-child(n), .model-daily-sales-table thead th:nth-child(n) { width: auto; }
-.model-top-brand-table thead th:nth-child(2) { width: 38%; }
-.model-daily-sales-table thead th:nth-child(3) { width: 34%; }
+.model-top-brand-table thead th:nth-child(1) { width: 12%; }
+.model-top-brand-table thead th:nth-child(2) { width: 31%; }
+.model-daily-sales-table thead th:nth-child(1) { width: 7%; }
+.model-daily-sales-table thead th:nth-child(2) { width: 11%; }
+.model-daily-sales-table thead th:nth-child(3) { width: 27%; }
 .model-top-brand-table tbody th strong, .model-daily-sales-table tbody th strong { font-size: 10.8px; }
 .model-top-brand-table tbody th small, .model-daily-sales-table tbody th small { font-size: 8.2px; }
+.model-top-brand-table thead small, .model-daily-sales-table thead small { color: rgba(255,255,255,.78); font-size: 7.5px; }
+.model-top-brand-table tbody td > small, .model-daily-sales-table tbody td > small { display: block; margin-top: 2px; color: var(--muted); font-size: 8.2px; }
+.model-top-brand-table tbody td:nth-child(5), .model-daily-sales-table tbody td:nth-child(6) { text-align: center; }
+.model-shop-sales-summary strong:has(.model-rate) { display: flex; gap: 5px; overflow: visible; }
 
 .model-table-capture-active { min-height: 100vh; padding: 10px 0 16px; background: #f8fafc; }
 .model-table-capture-active > section:not(.model-performance-section), .model-table-capture-active > footer { display: none; }
@@ -292,4 +304,3 @@ footer { margin-top: 85px; border-top: 1px solid var(--line); min-height: 120px;
   .model-table-capture-active .branch-capture-mode .model-branch-summary { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
-
