@@ -190,11 +190,11 @@ footer { margin-top: 85px; border-top: 1px solid var(--line); min-height: 120px;
 .model-shared-filter .shop-multiselect summary { height: 36px; border-color: color-mix(in srgb, var(--model-brand) 24%, #dbe2ea); background: white; font-size: 10px; letter-spacing: normal; text-transform: none; }
 .model-multi-filter { grid-column: span 2; }
 .model-filter-menu { width: min(460px, 88vw); text-align: left; letter-spacing: normal; text-transform: none; }
-.model-shop-sales-controls { min-width: 440px; grid-template-columns: minmax(190px, 1fr) minmax(205px, 1.05fr); }
-.model-sales-date-filter { min-width: 0; display: grid; gap: 4px; position: relative; z-index: 20; color: var(--muted); font-size: 7.5px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
-.model-sales-date-filter summary { height: 34px; border-color: color-mix(in srgb, var(--model-brand) 24%, #dbe2ea); background: white; font-size: 9px; letter-spacing: normal; text-transform: none; }
-.model-sales-date-menu { right: 0; left: auto; width: min(350px, 88vw); text-align: left; letter-spacing: normal; text-transform: none; }
-.model-sales-date-menu .shop-option-list { max-height: 250px; }
+.model-shop-sales-controls { min-width: 520px; grid-template-columns: minmax(170px, .8fr) minmax(330px, 1.35fr); }
+.model-sales-date-range { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.model-sales-date-range label { display: grid; gap: 4px; color: var(--muted); font-size: 7.5px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+.model-sales-date-range input { width: 100%; min-width: 0; height: 34px; padding: 0 8px; border: 1px solid color-mix(in srgb, var(--model-brand) 24%, #dbe2ea); border-radius: 9px; outline: none; color: var(--ink); background: white; font-size: 9px; font-weight: 800; }
+.model-sales-date-range input:focus { border-color: var(--model-brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--model-brand) 12%, transparent); }
 .model-card-actions { display: flex; align-items: flex-end; justify-content: flex-end; gap: 10px; }
 .model-card-actions .capture-view-button { height: 32px; padding-inline: 10px; }
 .shared-filter-note { display: grid; align-content: center; gap: 3px; min-height: 34px; color: var(--model-brand); font-size: 10px; font-weight: 900; text-align: right; }
@@ -256,14 +256,14 @@ footer { margin-top: 85px; border-top: 1px solid var(--line); min-height: 120px;
 .model-table-capture-active .model-capture-target .model-shop-table-wrap,
 .model-table-capture-active .model-capture-target .model-shop-sales-table-wrap,
 .model-table-capture-active .model-capture-target .model-branch-analysis-wrap { max-height: none; overflow: visible; }
-.model-table-capture-active .model-capture-target table { width: 100%; min-width: 0; zoom: var(--model-capture-zoom); }
-.model-table-capture-active .model-capture-target table th, .model-table-capture-active .model-capture-target table td { height: 30px; padding: 3px 4px; font-size: 9.8px; }
-.model-table-capture-active .model-capture-target table thead th { height: 35px; font-size: 8.3px; }
-.model-table-capture-active .model-capture-target table tbody th strong { font-size: 10px; }
+.model-table-capture-active .model-capture-target table { width: 100%; min-width: 0; zoom: 1; }
+.model-table-capture-active .model-capture-target table th, .model-table-capture-active .model-capture-target table td { height: 38px; padding: 5px 7px; font-size: 12px; }
+.model-table-capture-active .model-capture-target table thead th { height: 43px; font-size: 10px; }
+.model-table-capture-active .model-capture-target table tbody th strong { font-size: 12.5px; }
 .model-table-capture-active .model-capture-target table tbody th small,
-.model-table-capture-active .model-capture-target table tbody td > small { font-size: 7.5px; }
-.model-table-capture-active .model-capture-target .model-rate { min-width: 40px; padding: 2px 3px; font-size: 8px; }
-.model-table-capture-active .model-capture-target .model-brand-pill { font-size: 8px; }
+.model-table-capture-active .model-capture-target table tbody td > small { font-size: 9.5px; }
+.model-table-capture-active .model-capture-target .model-rate { min-width: 48px; padding: 3px 5px; font-size: 9.5px; }
+.model-table-capture-active .model-capture-target .model-brand-pill { font-size: 9.5px; }
 
 @media (max-width: 1200px) and (min-width: 921px) { .capture-mode .model-area-table { zoom: .82; } }
 @media (max-width: 920px) {
@@ -300,7 +300,7 @@ footer { margin-top: 85px; border-top: 1px solid var(--line); min-height: 120px;
   .model-table-capture-active .model-capture-target > header { gap: 6px; padding: 7px 8px; }
   .model-table-capture-active .model-capture-target h3, .model-table-capture-active .model-capture-target h4 { font-size: 15px; }
   .model-table-capture-active .model-capture-target .capture-view-button { height: 28px; font-size: 8px; }
-  .model-table-capture-active .model-capture-target table { width: 100%; zoom: .56; }
+  .model-table-capture-active .model-capture-target table { width: 100%; zoom: .78; }
   .model-table-capture-active .branch-capture-mode .model-branch-summary { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

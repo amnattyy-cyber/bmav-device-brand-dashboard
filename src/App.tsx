@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DailySale, type DataRow } from "./google-sheet-data";
-import { modelSaleKey, modelShopInsight, summarizeModelSales } from "./model-sales";
+import { clampModelSalesDateRange, modelSaleKey, modelShopInsight, summarizeModelSales } from "./model-sales";
 import { comparableWeekPeriod, previousWeekId, shortDateRange, weekDataStatus, weekIndexForDate, weekRanges, wowChangeRate } from "./wow-periods";
 
 type Metric = "net" | "qty";
@@ -97,7 +97,7 @@ export default function Home() {
   const [modelBrand, setModelBrand] = useState("SAMSUNG");
   const [modelQuery, setModelQuery] = useState("");
   const [selectedModelKeys, setSelectedModelKeys] = useState<string[]>([]);
-  const [selectedModelDates, setSelectedModelDates] = useState<string[]>([fallbackData.latest]);
+  const [modelSalesRange, setModelSalesRange] = useState({ start: fallbackData.latest, end: fallbackData.latest });
   const [modelSort, setModelSort] = useState<Metric>("net");
   const [viewMode, setViewMode] = useState<ViewMode>("mtd");
   const [selectedBrand, setSelectedBrand] = useState("ALL");
@@ -109,6 +109,7 @@ export default function Home() {
   const [matrixCapture, setMatrixCapture] = useState(false);
   const [modelTableCapture, setModelTableCapture] = useState<ModelTableCapture>(null);
   const previousLatestDate = useRef(fallbackData.latest);
+  const previousModelSalesLatestDate = useRef(fallbackData.latest);
   const latestDay = Number(data.latest.slice(-2));
   const monthPrefix = data.latest.slice(0, 7);
   const [yearNumber, monthNumber] = monthPrefix.split("-").map(Number);
@@ -538,31 +539,35 @@ export default function Home() {
     };
   }, [data.latest, data.modelSales, data.sales, data.shops, formatDate, modelBrand, modelQuery, modelSort, monthPrefix, selectedDay, selectedModelKeys, selectedShops, selectedWeek]);
 
-  const modelSalesDateOptions = useMemo(() => isoDateRange(modelPerformance.period.currentStart, modelPerformance.period.currentEnd), [modelPerformance.period.currentEnd, modelPerformance.period.currentStart]);
+  const modelSalesDateBounds = useMemo(() => {
+    const dates = data.modelSales.map((sale) => sale.date).filter(Boolean).sort();
+    const earliestMonth = (dates[0] ?? data.latest).slice(0, 7);
+    return { min: `${earliestMonth}-01`, max: data.latest };
+  }, [data.latest, data.modelSales]);
 
   useEffect(() => {
-    setSelectedModelDates((current) => {
-      if (current.length === 0) return current;
-      const available = current.filter((date) => modelSalesDateOptions.includes(date));
-      if (available.length) return available;
-      const selectedDate = formatDate(selectedDay);
-      return modelSalesDateOptions.includes(selectedDate) ? [selectedDate] : modelSalesDateOptions.slice(-1);
+    const priorLatest = previousModelSalesLatestDate.current;
+    setModelSalesRange((current) => {
+      const followsLatest = current.start === priorLatest && current.end === priorLatest;
+      const candidate = followsLatest ? { start: data.latest, end: data.latest } : current;
+      return clampModelSalesDateRange(candidate.start, candidate.end, modelSalesDateBounds.min, modelSalesDateBounds.max);
     });
-  }, [formatDate, modelSalesDateOptions, selectedDay]);
+    previousModelSalesLatestDate.current = data.latest;
+  }, [data.latest, modelSalesDateBounds.max, modelSalesDateBounds.min]);
 
-  const activeModelSalesDates = useMemo(() => {
-    const available = selectedModelDates.filter((date) => modelSalesDateOptions.includes(date));
-    if (available.length) return available.sort();
-    return selectedModelDates.length === 0 ? modelSalesDateOptions : modelSalesDateOptions.slice(-1);
-  }, [modelSalesDateOptions, selectedModelDates]);
-  const modelSalesDateLabel = activeModelSalesDates.length === modelSalesDateOptions.length
-    ? `${modelPerformance.range.id} · ${activeModelSalesDates.length} วัน`
-    : activeModelSalesDates.length === 1
-      ? compactDate(activeModelSalesDates[0])
-      : `${activeModelSalesDates.length} วันที่เลือก`;
+  const activeModelSalesDates = useMemo(
+    () => isoDateRange(modelSalesRange.start, modelSalesRange.end),
+    [modelSalesRange.end, modelSalesRange.start],
+  );
+  const modelSalesDateLabel = activeModelSalesDates.length === 1
+    ? compactDate(activeModelSalesDates[0])
+    : `${compactDate(modelSalesRange.start)}–${compactDate(modelSalesRange.end)} · ${activeModelSalesDates.length} วัน`;
 
-  const toggleModelSalesDate = (date: string) => {
-    setSelectedModelDates((current) => current.includes(date) ? current.filter((item) => item !== date) : [...current, date]);
+  const changeModelSalesStartDate = (start: string) => {
+    setModelSalesRange((current) => clampModelSalesDateRange(start, current.end, modelSalesDateBounds.min, modelSalesDateBounds.max));
+  };
+  const changeModelSalesEndDate = (end: string) => {
+    setModelSalesRange((current) => clampModelSalesDateRange(current.start, end, modelSalesDateBounds.min, modelSalesDateBounds.max));
   };
 
   const shopModelSales = useMemo(() => {
@@ -572,6 +577,9 @@ export default function Home() {
     const currentDateSet = new Set(activeModelSalesDates);
     const previousDates = activeModelSalesDates.map((date) => shiftIsoDate(date, -7));
     const previousDateSet = new Set(previousDates);
+    const previousDateLabel = previousDates.length === 1
+      ? compactDate(previousDates[0])
+      : `${compactDate(previousDates[0])}–${compactDate(previousDates.at(-1) ?? previousDates[0])}`;
     const asOfDate = activeModelSalesDates.at(-1) ?? formatDate(selectedDay);
     const asOfMonth = asOfDate.slice(0, 7);
     const currentSales = inScope.filter((sale) => currentDateSet.has(sale.date));
@@ -604,9 +612,9 @@ export default function Home() {
       wowQty: wowChangeRate(totals.qty, previousTotals.qty),
       wowNet: wowChangeRate(totals.net, previousTotals.net),
       scopeLabel,
-      previousWeek: modelPerformance.previousWeek,
+      previousDateLabel,
     };
-  }, [activeModelSalesDates, data.modelSales, formatDate, modelBrand, modelPerformance.modelOptions, modelPerformance.previousWeek, modelShopOptions, modelSort, selectedDay, selectedModelKeys, selectedShops]);
+  }, [activeModelSalesDates, data.modelSales, formatDate, modelBrand, modelPerformance.modelOptions, modelShopOptions, modelSort, selectedDay, selectedModelKeys, selectedShops]);
   const modelTrendMax = Math.max(...modelPerformance.trend.map((item) => item[modelSort]), 1);
   const modelColor = brandColors[modelBrand] ?? "#7c3aed";
   const modelSelectionLabel = selectedModelKeys.length === 0
@@ -733,14 +741,8 @@ export default function Home() {
     <button className={`capture-view-button ${modelTableCapture === capture ? "active" : ""}`} type="button" aria-pressed={modelTableCapture === capture} onClick={() => toggleModelCapture(capture, targetId)}><span aria-hidden="true">{modelTableCapture === capture ? "×" : "▣"}</span>{modelTableCapture === capture ? "ออกจาก Capture" : "Capture Table"}</button>
   );
 
-  const captureRowCount = modelTableCapture === "overview" ? modelPerformance.rows.length
-    : modelTableCapture === "shop-wow" || modelTableCapture === "branch" ? modelPerformance.shopRows.length
-      : modelTableCapture === "top-models" ? shopModelSales.topModels.length
-        : modelTableCapture === "daily-sales" ? shopModelSales.dailyRows.length : 0;
-  const modelCaptureZoom = Math.min(1, Math.max(0.46, 520 / Math.max(captureRowCount * 30 + 90, 1)));
-
   return (
-    <main className={matrixCapture ? "matrix-capture-active" : modelTableCapture ? `model-table-capture-active capture-${modelTableCapture}` : ""} style={{ "--model-capture-zoom": modelCaptureZoom } as React.CSSProperties}>
+    <main className={matrixCapture ? "matrix-capture-active" : modelTableCapture ? `model-table-capture-active capture-${modelTableCapture}` : ""}>
       <section className="hero shell">
         <div className="hero-copy">
           <div className="eyebrow"><span className="live-dot" /> BMAV • DEVICE PERFORMANCE</div>
@@ -931,21 +933,24 @@ export default function Home() {
 
           <section className="model-shop-sales-card" aria-labelledby="model-shop-sales-title">
             <header>
-              <div><span>SHOP × MODEL × MULTI-DATE</span><h3 id="model-shop-sales-title">ยอดขาย By Model รายสาขา</h3><p>เลือกหลายวันภายใน Week เพื่อรวมยอด และเทียบวันเดียวกันของสัปดาห์ก่อนแบบจำนวนวันเท่ากัน</p></div>
+              <div><span>SHOP × MODEL × DATE RANGE</span><h3 id="model-shop-sales-title">ยอดขาย By Model รายสาขา</h3><p>เลือกวันเริ่มต้น–วันสิ้นสุดเพื่อรวมยอด และเทียบวันตรงกันย้อนหลัง 7 วันแบบจำนวนวันเท่ากัน</p></div>
               <div className="model-shop-sales-controls">
                 <div className="shared-filter-note">{modelSelectionLabel}<small>{shopModelSales.scopeLabel}</small></div>
-                <div className="model-sales-date-filter"><span>Sales Date (เลือกได้หลายวัน)</span><details className="shop-multiselect"><summary aria-label="เลือกหลายวันสำหรับยอดขาย By Model รายสาขา"><span>{modelSalesDateLabel}</span><b aria-hidden="true">⌄</b></summary><div className="shop-menu model-sales-date-menu"><label className="shop-option all-shops"><input type="checkbox" checked={selectedModelDates.length === 0} onChange={() => setSelectedModelDates([])} /><span>ทุกวันที่มีข้อมูลใน {modelPerformance.range.id}</span></label><div className="shop-option-list">{modelSalesDateOptions.map((date) => <label className="shop-option" key={date}><input type="checkbox" checked={selectedModelDates.includes(date)} onChange={() => toggleModelSalesDate(date)} /><span>{compactDate(date)} 2026</span></label>)}</div></div></details></div>
+                <div className="model-sales-date-range" role="group" aria-label="เลือกช่วงวันที่สำหรับ Performance รุ่น">
+                  <label><span>Start date</span><input type="date" min={modelSalesDateBounds.min} max={modelSalesDateBounds.max} value={modelSalesRange.start} onChange={(event) => changeModelSalesStartDate(event.target.value)} /></label>
+                  <label><span>End date</span><input type="date" min={modelSalesRange.start} max={modelSalesDateBounds.max} value={modelSalesRange.end} onChange={(event) => changeModelSalesEndDate(event.target.value)} /></label>
+                </div>
               </div>
             </header>
             <div className="model-shop-sales-summary">
               <article><span>Shop Scope</span><strong>{shopModelSales.scopeLabel}</strong><small>เชื่อมกับตัวกรองสาขาหลัก</small></article>
               <article><span>{modelSalesDateLabel}</span><strong>{integer.format(shopModelSales.totals.qty)} เครื่อง</strong><small>Net ฿{integer.format(shopModelSales.totals.net)} • {shopModelSales.dailyRows.length} รุ่น</small></article>
-              <article><span>{shopModelSales.previousWeek} · วันตรงกัน</span><strong>{integer.format(shopModelSales.previousTotals.qty)} เครื่อง</strong><small>Net ฿{integer.format(shopModelSales.previousTotals.net)}</small></article>
+              <article><span>{shopModelSales.previousDateLabel} · ฐาน 7 วันก่อน</span><strong>{integer.format(shopModelSales.previousTotals.qty)} เครื่อง</strong><small>Net ฿{integer.format(shopModelSales.previousTotals.net)}</small></article>
               <article><span>%WoW Qty / Net</span><strong><em className={`model-rate ${comparisonTone(shopModelSales.wowQty)}`}>{wowRateLabel(shopModelSales.wowQty)}</em><em className={`model-rate ${comparisonTone(shopModelSales.wowNet)}`}>{wowRateLabel(shopModelSales.wowNet)}</em></strong><small>เทียบวันตรงกันย้อนหลัง 7 วัน</small></article>
             </div>
             <div className="model-shop-sales-grid">
-              <section className={modelTableCapture === "top-models" ? "model-capture-target" : ""}><header><div><span>SELECTED MODELS · WOW</span><h4 id="model-top-models-title">Performance รุ่นตามช่วงวันที่</h4></div><div className="model-card-actions"><p>{modelSalesDateLabel} • เรียงตาม {modelSort === "net" ? "Net" : "Qty"}</p>{captureButton("top-models", "model-top-models-title")}</div></header><div className="model-shop-sales-table-wrap"><table className="model-top-brand-table"><thead><tr><th>Brand</th><th>Model</th><th>วันที่เลือก<br /><small>QTY / Net</small></th><th>{shopModelSales.previousWeek}<br /><small>QTY / Net</small></th><th>%WoW<br /><small>QTY / Net</small></th><th>MTD<br /><small>QTY / Net</small></th></tr></thead><tbody>{shopModelSales.topModels.map((row) => <tr key={row.key} onClick={() => setSelectedModelKeys([row.key])}><td><span className="model-brand-pill" style={{ "--pill": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.brand}</span></td><th><strong>{row.model}</strong><small>คลิกเพื่อเลือกเฉพาะรุ่นนี้</small></th><td><b>{integer.format(row.current.qty)}</b><small>฿{integer.format(row.current.net)}</small></td><td><b>{integer.format(row.previous.qty)}</b><small>฿{integer.format(row.previous.net)}</small></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span><small><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></small></td><td><b>{integer.format(row.mtd.qty)}</b><small>฿{integer.format(row.mtd.net)}</small></td></tr>)}</tbody></table></div></section>
-              <section className={modelTableCapture === "daily-sales" ? "model-capture-target" : ""}><header><div><span>MULTI-DATE MODEL SALES · WOW</span><h4 id="model-daily-sales-title">รุ่นที่ขายในวันที่เลือก</h4></div><div className="model-card-actions"><p>{shopModelSales.dailyRows.length ? `${shopModelSales.dailyRows.length} รุ่น • ${modelSalesDateLabel}` : "No Sales"}</p>{captureButton("daily-sales", "model-daily-sales-title")}</div></header><div className="model-shop-sales-table-wrap">{shopModelSales.dailyRows.length ? <table className="model-daily-sales-table"><thead><tr><th>Rank</th><th>Brand</th><th>Model</th><th>วันที่เลือก<br /><small>QTY / Net</small></th><th>{shopModelSales.previousWeek}<br /><small>QTY / Net</small></th><th>%WoW<br /><small>QTY / Net</small></th><th>MTD<br /><small>QTY / Net</small></th></tr></thead><tbody>{shopModelSales.dailyRows.map((row, index) => <tr key={row.key} onClick={() => setSelectedModelKeys([row.key])}><td><b>#{index + 1}</b></td><td><span className="model-brand-pill" style={{ "--pill": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.brand}</span></td><th><strong>{row.model}</strong><small>คลิกเพื่อเลือกเฉพาะรุ่นนี้</small></th><td><b>{integer.format(row.current.qty)}</b><small>฿{integer.format(row.current.net)}</small></td><td><b>{integer.format(row.previous.qty)}</b><small>฿{integer.format(row.previous.net)}</small></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span><small><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></small></td><td><b>{integer.format(row.mtd.qty)}</b><small>฿{integer.format(row.mtd.net)}</small></td></tr>)}</tbody></table> : <div className="model-daily-empty"><strong>No Sales</strong><span>ไม่พบยอดขาย By Model ของ {shopModelSales.scopeLabel} ใน {modelSalesDateLabel}</span></div>}</div></section>
+              <section className={modelTableCapture === "top-models" ? "model-capture-target" : ""}><header><div><span>SELECTED MODELS · WOW</span><h4 id="model-top-models-title">Performance รุ่นตามช่วงวันที่</h4></div><div className="model-card-actions"><p>{modelSalesDateLabel} • เรียงตาม {modelSort === "net" ? "Net" : "Qty"}</p>{captureButton("top-models", "model-top-models-title")}</div></header><div className="model-shop-sales-table-wrap"><table className="model-top-brand-table"><thead><tr><th>Brand</th><th>Model</th><th>วันที่เลือก<br /><small>QTY / Net</small></th><th>{shopModelSales.previousDateLabel}<br /><small>QTY / Net</small></th><th>%WoW<br /><small>QTY / Net</small></th><th>MTD<br /><small>QTY / Net</small></th></tr></thead><tbody>{shopModelSales.topModels.map((row) => <tr key={row.key} onClick={() => setSelectedModelKeys([row.key])}><td><span className="model-brand-pill" style={{ "--pill": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.brand}</span></td><th><strong>{row.model}</strong><small>คลิกเพื่อเลือกเฉพาะรุ่นนี้</small></th><td><b>{integer.format(row.current.qty)}</b><small>฿{integer.format(row.current.net)}</small></td><td><b>{integer.format(row.previous.qty)}</b><small>฿{integer.format(row.previous.net)}</small></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span><small><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></small></td><td><b>{integer.format(row.mtd.qty)}</b><small>฿{integer.format(row.mtd.net)}</small></td></tr>)}</tbody></table></div></section>
+              <section className={modelTableCapture === "daily-sales" ? "model-capture-target" : ""}><header><div><span>DATE RANGE MODEL SALES · WOW</span><h4 id="model-daily-sales-title">รุ่นที่ขายในวันที่เลือก</h4></div><div className="model-card-actions"><p>{shopModelSales.dailyRows.length ? `${shopModelSales.dailyRows.length} รุ่น • ${modelSalesDateLabel}` : "No Sales"}</p>{captureButton("daily-sales", "model-daily-sales-title")}</div></header><div className="model-shop-sales-table-wrap">{shopModelSales.dailyRows.length ? <table className="model-daily-sales-table"><thead><tr><th>Rank</th><th>Brand</th><th>Model</th><th>วันที่เลือก<br /><small>QTY / Net</small></th><th>{shopModelSales.previousDateLabel}<br /><small>QTY / Net</small></th><th>%WoW<br /><small>QTY / Net</small></th><th>MTD<br /><small>QTY / Net</small></th></tr></thead><tbody>{shopModelSales.dailyRows.map((row, index) => <tr key={row.key} onClick={() => setSelectedModelKeys([row.key])}><td><b>#{index + 1}</b></td><td><span className="model-brand-pill" style={{ "--pill": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.brand}</span></td><th><strong>{row.model}</strong><small>คลิกเพื่อเลือกเฉพาะรุ่นนี้</small></th><td><b>{integer.format(row.current.qty)}</b><small>฿{integer.format(row.current.net)}</small></td><td><b>{integer.format(row.previous.qty)}</b><small>฿{integer.format(row.previous.net)}</small></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span><small><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></small></td><td><b>{integer.format(row.mtd.qty)}</b><small>฿{integer.format(row.mtd.net)}</small></td></tr>)}</tbody></table> : <div className="model-daily-empty"><strong>No Sales</strong><span>ไม่พบยอดขาย By Model ของ {shopModelSales.scopeLabel} ใน {modelSalesDateLabel}</span></div>}</div></section>
             </div>
           </section>
         </>}

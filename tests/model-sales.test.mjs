@@ -8,7 +8,18 @@ const javascript = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(javascript).toString("base64")}`;
-const { modelSaleKey, modelShopInsight, parseCsv, parseModelSalesTable, summarizeModelSales, topModelsByBrand } = await import(moduleUrl);
+const { clampModelSalesDateRange, modelSaleKey, modelShopInsight, parseCsv, parseModelSalesTable, summarizeModelSales, topModelsByBrand } = await import(moduleUrl);
+
+test("keeps the model date range valid and inside the available data", () => {
+  assert.deepEqual(clampModelSalesDateRange("2026-08-20", "2026-08-18", "2026-08-01", "2026-08-31"), {
+    start: "2026-08-20",
+    end: "2026-08-20",
+  });
+  assert.deepEqual(clampModelSalesDateRange("2026-07-15", "2026-09-05", "2026-08-01", "2026-08-31"), {
+    start: "2026-08-01",
+    end: "2026-08-31",
+  });
+});
 
 test("summarizes daily model sales and selects the top model for each brand", () => {
   const sales = [
