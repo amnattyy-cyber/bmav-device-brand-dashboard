@@ -16,6 +16,19 @@ export type ModelSaleSummary = {
   net: number;
 };
 
+export type ModelSalesDateRange = {
+  start: string;
+  end: string;
+};
+
+export function clampModelSalesDateRange(start: string, end: string, min: string, max: string): ModelSalesDateRange {
+  const safeMin = min <= max ? min : max;
+  const safeMax = max >= safeMin ? max : safeMin;
+  const safeStart = start < safeMin ? safeMin : start > safeMax ? safeMax : start;
+  const safeEnd = end < safeStart ? safeStart : end > safeMax ? safeMax : end;
+  return { start: safeStart, end: safeEnd };
+}
+
 export function summarizeModelSales(sales: ModelSale[]): ModelSaleSummary[] {
   const grouped = new Map<string, ModelSaleSummary>();
   for (const sale of sales) {
