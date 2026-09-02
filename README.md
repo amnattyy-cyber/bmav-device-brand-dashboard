@@ -15,6 +15,7 @@ Public interactive dashboard for BMA V - Central device performance in August 20
 - Compact All Brand WoW table with equal-day QTY and Net Amount base/current values, differences, percentage changes, sorting, and a Grand Total row
 - Brand-colored Shop WoW table with one-brand selection, equal-day week labels, prorated QTY/Net targets, differences, WoW percentages, achievement colors, and every shop including No Target rows
 - Live `Daily_Sales_Model` analysis with one shared Brand, multi-model, and multi-shop filter set across every Model Performance table, including aggregated Daily/MTD totals, equal-day QTY/Net WoW, daily trend, branch ranking, and shop-level sales
+- Live BMA V Stock snapshot for the six Focus models, aggregated by shop and model with balance, stock value, MTD days cover, 15-shop filtering, and a full-table capture mode
 - Every Model Performance table includes a one-screen `Capture Table` mode for Desktop and Mobile, with larger normal-view text and tighter balanced columns
 - Shop × Model analysis supports selecting multiple dates inside the active Week and calculates QTY/Net WoW against the matching weekdays seven days earlier
 - Brand x Shop ranking matrix with the top 12 brands, Daily/MTD/Run Rate values, projected run-rate achievement, per-brand shop ranks, an unranked ALL Shop total, and a compact Capture View
