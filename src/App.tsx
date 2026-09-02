@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dashboardForMonth, dashboardMonths, fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DailySale, type DataRow } from "./google-sheet-data";
 import { clampModelSalesDateRange, modelSaleKey, modelShopInsight, summarizeModelSales } from "./model-sales";
+import { focusStockKey } from "./stock-data";
 import { comparableWeekPeriod, previousWeekId, shortDateRange, weekDataStatus, weekIndexForDate, weekRanges, wowChangeRate } from "./wow-periods";
 
 type Metric = "net" | "qty";
 type ViewMode = "day" | "mtd" | "achieve" | "runrate";
 type MatrixRanking = "rank" | "achieve" | "runrate";
 type SourceStatus = "loading" | "live" | "fallback";
-type ModelTableCapture = "focus-models" | "focus-shops" | "overview" | "shop-wow" | "branch" | "top-models" | "daily-sales" | null;
+type ModelTableCapture = "focus-models" | "focus-shops" | "focus-stock" | "overview" | "shop-wow" | "branch" | "top-models" | "daily-sales" | null;
 type WeekSnapshot = { net: number; qty: number };
 type ViewMetrics = {
   monthlyTarget: number;
@@ -668,6 +669,35 @@ export default function Home() {
       .sort((a, b) => b.total[modelSort] - a.total[modelSort] || a.shop.localeCompare(b.shop));
     return { rows, daily, shopRows, total };
   }, [data.modelSales, formatDate, modelShopOptions, modelSort, monthPrefix, selectedDay, selectedShops]);
+  const focusStockMonitor = useMemo(() => {
+    const visibleShops = modelShopOptions.filter(([code]) => selectedShops.length === 0 || selectedShops.includes(code));
+    const visibleCodes = new Set(visibleShops.map(([code]) => code));
+    const scoped = data.stock.filter((row) => visibleCodes.has(row.code));
+    const rows = focusModels.map((definition) => {
+      const stock = scoped.filter((row) => focusStockKey(row.model) === definition.key);
+      const sales = focusModelMonitor.rows.find((row) => row.key === definition.key)?.total.qty ?? 0;
+      const balance = stock.reduce((sum, row) => sum + row.balance, 0);
+      const amount = stock.reduce((sum, row) => sum + row.amount, 0);
+      const activeShops = new Set(stock.filter((row) => row.balance > 0).map((row) => row.code)).size;
+      const dailyAverage = selectedDay ? sales / selectedDay : 0;
+      return { ...definition, balance, amount, activeShops, daysCover: dailyAverage > 0 ? balance / dailyAverage : null };
+    });
+    const shopRows = visibleShops.map(([code, shop]) => {
+      const values = Object.fromEntries(focusModels.map((definition) => {
+        const stock = scoped.filter((row) => row.code === code && focusStockKey(row.model) === definition.key);
+        return [definition.key, {
+          balance: stock.reduce((sum, row) => sum + row.balance, 0),
+          amount: stock.reduce((sum, row) => sum + row.amount, 0),
+        }];
+      }));
+      const total = Object.values(values).reduce((sum, value) => ({ balance: sum.balance + value.balance, amount: sum.amount + value.amount }), { balance: 0, amount: 0 });
+      return { code, shop, values, total };
+    }).sort((a, b) => modelSort === "net"
+      ? b.total.amount - a.total.amount || b.total.balance - a.total.balance || a.shop.localeCompare(b.shop)
+      : b.total.balance - a.total.balance || b.total.amount - a.total.amount || a.shop.localeCompare(b.shop));
+    const total = rows.reduce((sum, row) => ({ balance: sum.balance + row.balance, amount: sum.amount + row.amount }), { balance: 0, amount: 0 });
+    return { rows, shopRows, total, shopCount: visibleShops.length };
+  }, [data.stock, focusModelMonitor.rows, modelShopOptions, modelSort, selectedDay, selectedShops]);
   const modelTrendMax = Math.max(...modelPerformance.trend.map((item) => item[modelSort]), 1);
   const modelColor = brandColors[modelBrand] ?? "#7c3aed";
   const modelSelectionLabel = selectedModelKeys.length === 0
@@ -963,6 +993,19 @@ export default function Home() {
               <tbody>{focusModelMonitor.shopRows.map((row) => <tr key={row.code}><th><strong>{row.shop}</strong><small>{row.code}{row.total.qty === 0 && row.total.net === 0 ? " · No Sales" : ""}</small></th>{focusModelMonitor.rows.map((model) => { const value = row.values[model.key]; return <td key={model.key}><strong>{integer.format(value.qty)}</strong><small>฿{integer.format(value.net)}</small></td>; })}<td className="focus-daily-total"><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td></tr>)}</tbody>
               <tfoot><tr><th>Grand Total</th>{focusModelMonitor.rows.map((row) => <td key={row.key}><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td>)}<td><strong>{integer.format(focusModelMonitor.total.qty)}</strong><small>฿{integer.format(focusModelMonitor.total.net)}</small></td></tr></tfoot>
             </table></div>
+          </section>
+
+          <section className={`focus-model-monitor-card focus-stock-card ${modelTableCapture === "focus-stock" ? "model-capture-target" : ""}`} aria-labelledby="focus-stock-title">
+            <header><div><span>MODEL FOCUS · STOCK SNAPSHOT</span><h3 id="focus-stock-title">Stock ล่าสุด 6 รุ่น Focus รายสาขา</h3><p>Data Stock B5 • {focusStockMonitor.shopCount} สาขาตามตัวกรอง • Stock เป็นข้อมูลล่าสุดและไม่เปลี่ยนตาม Month</p></div><div className="model-card-actions"><p><b className={`stock-source-badge ${data.stock.length ? "live" : "unavailable"}`}>{data.stock.length ? "STOCK LIVE" : "STOCK UNAVAILABLE"}</b> รีเฟรชทุก 5 นาที</p>{captureButton("focus-stock", "focus-stock-title")}</div></header>
+            {data.stock.length ? <>
+              <div className="focus-model-summary focus-stock-summary">{focusStockMonitor.rows.map((row) => <article key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}><span>{row.label}</span><strong>{integer.format(row.balance)} เครื่อง</strong><small>มูลค่า ฿{integer.format(row.amount)} • มี Stock {row.activeShops}/{focusStockMonitor.shopCount} สาขา</small><small>{row.daysCover == null ? "Days Cover — (ยังไม่มียอดขาย MTD)" : `Days Cover ${number.format(row.daysCover)} วัน`}</small></article>)}</div>
+              <div className="focus-model-table-wrap"><table className="focus-model-table focus-model-shop-table focus-stock-table">
+                <colgroup><col className="focus-shop-name-column" /><col span={7} className="focus-shop-value-column" /></colgroup>
+                <thead><tr><th>Shop</th>{focusStockMonitor.rows.map((row) => <th key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.label}<small>{row.brand}</small></th>)}<th>Total Stock</th></tr></thead>
+                <tbody>{focusStockMonitor.shopRows.map((row) => <tr key={row.code}><th><strong>{row.shop}</strong><small>{row.code}{row.total.balance === 0 ? " · Stock Out" : ""}</small></th>{focusStockMonitor.rows.map((model) => { const value = row.values[model.key]; return <td className={value.balance === 0 ? "stock-zero" : ""} key={model.key}><strong>{integer.format(value.balance)}</strong><small>฿{integer.format(value.amount)}</small></td>; })}<td className={`focus-daily-total ${row.total.balance === 0 ? "stock-zero" : ""}`}><strong>{integer.format(row.total.balance)}</strong><small>฿{integer.format(row.total.amount)}</small></td></tr>)}</tbody>
+                <tfoot><tr><th>Grand Total</th>{focusStockMonitor.rows.map((row) => <td key={row.key}><strong>{integer.format(row.balance)}</strong><small>฿{integer.format(row.amount)}</small></td>)}<td><strong>{integer.format(focusStockMonitor.total.balance)}</strong><small>฿{integer.format(focusStockMonitor.total.amount)}</small></td></tr></tfoot>
+              </table></div>
+            </> : <div className="model-empty-state stock-empty-state"><strong>ยังเชื่อม Stock ไม่สำเร็จ</strong><span>Dashboard ยอดขายยังใช้งานได้ตามปกติ และระบบจะลองเชื่อม Data Stock B5 ใหม่อัตโนมัติทุก 5 นาที</span></div>}
           </section>
 
           <section className={`model-area-card ${modelTableCapture === "overview" ? "model-capture-target" : ""}`} aria-labelledby="model-area-overview-title">

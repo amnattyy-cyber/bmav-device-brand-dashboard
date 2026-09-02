@@ -1,5 +1,6 @@
 import fallbackJson from "./dashboard-data.json";
 import { parseCsv, parseModelSalesTable, type ModelSale } from "./model-sales";
+import { parseStockTable, type StockRow } from "./stock-data";
 
 export type DataRow = {
   brand?: string;
@@ -24,6 +25,7 @@ export type DailySale = {
   net: number;
 };
 export type { ModelSale } from "./model-sales";
+export type { StockRow } from "./stock-data";
 export type DashboardData = {
   area: string;
   month: string;
@@ -33,10 +35,11 @@ export type DashboardData = {
   shops: ShopRow[];
   sales: DailySale[];
   modelSales: ModelSale[];
+  stock: StockRow[];
   comparison?: unknown;
 };
 
-function fallbackSales(data: Omit<DashboardData, "sales" | "modelSales">): DailySale[] {
+function fallbackSales(data: Omit<DashboardData, "sales" | "modelSales" | "stock">): DailySale[] {
   const [year, month] = data.latest.split("-").map(Number);
   const currentPrefix = `${year}-${String(month).padStart(2, "0")}`;
   const previousDate = new Date(Date.UTC(year, month - 2, 1));
@@ -62,10 +65,12 @@ function fallbackSales(data: Omit<DashboardData, "sales" | "modelSales">): Daily
   });
 }
 
-const fallbackBase = fallbackJson as Omit<DashboardData, "sales" | "modelSales">;
-export const fallbackData: DashboardData = { ...fallbackBase, sales: fallbackSales(fallbackBase), modelSales: [] };
+const fallbackBase = fallbackJson as Omit<DashboardData, "sales" | "modelSales" | "stock">;
+export const fallbackData: DashboardData = { ...fallbackBase, sales: fallbackSales(fallbackBase), modelSales: [], stock: [] };
 
 const GOOGLE_SHEET_ID = "1qsVJk2DbXW8EInVK7gFIOtCB9-5GdVp5vJhU4hPK29k";
+const STOCK_SHEET_ID = "1appOkfuCPuReEM63lS5RT3gWt2dD4HB-FGl2_h5Vhrw";
+const STOCK_SHEET_GID = "1916106773";
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const SHEET_GIDS: Record<string, string> = {
   Daily_Sales: "892853742",
@@ -186,6 +191,48 @@ async function fetchSheetPage(sheetName: string, tableQuery?: string): Promise<s
   });
 }
 
+async function fetchStockSheet(): Promise<string[][]> {
+  const callbackName = `bmavStock_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const tableQuery = "select A,C,D,G,H,I,J,M,P where J = 'BMA V - Central' and G > 0 and (M contains 'GALAXY A06 5G' or M contains 'OPPO A6C' or M contains 'VIVO Y05' or M contains 'REDMI A7 PRO' or M contains 'HONOR X5C' or M contains 'INFINIX SMART 20')";
+  const query = new URLSearchParams({
+    gid: STOCK_SHEET_GID,
+    tq: tableQuery,
+    tqx: `out:json;responseHandler:${callbackName}`,
+    _: String(Date.now()),
+  });
+  const callbackHost = window as unknown as Record<string, ((response: GvizResponse) => void) | undefined>;
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      delete callbackHost[callbackName];
+      script.remove();
+    };
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Google Sheet Data Stock timed out"));
+    }, 20_000);
+
+    callbackHost[callbackName] = (response) => {
+      try {
+        resolve(gvizToRows(response));
+      } catch (error) {
+        reject(error);
+      } finally {
+        cleanup();
+      }
+    };
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("Google Sheet Data Stock could not be loaded"));
+    };
+    script.src = `https://docs.google.com/spreadsheets/d/${STOCK_SHEET_ID}/gviz/tq?${query}`;
+    script.async = true;
+    document.head.appendChild(script);
+  });
+}
+
 function previousMonthPrefix(monthPrefix: string) {
   const [year, month] = monthPrefix.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 2, 1));
@@ -288,11 +335,15 @@ async function fetchSheet(sheetName: string): Promise<string[][]> {
 }
 
 export async function loadGoogleSheetData(): Promise<DashboardData> {
-  const [salesTable, targetTable, modelTable] = await Promise.all([
+  const [salesTable, targetTable, modelTable, stockTable] = await Promise.all([
     fetchSheet("Daily_Sales"),
     fetchSheet("Target_Brand"),
     fetchSheet("Daily_Sales_Model").catch((error) => {
       console.warn("Daily_Sales_Model could not be loaded; Brand Monitor will remain available.", error);
+      return [] as string[][];
+    }),
+    fetchStockSheet().catch((error) => {
+      console.warn("Data Stock could not be loaded; sales performance will remain available.", error);
       return [] as string[][];
     }),
   ]);
@@ -325,6 +376,7 @@ export async function loadGoogleSheetData(): Promise<DashboardData> {
     net: numeric(row[salesColumns.net]),
   })).filter((row) => row.date && row.code && row.brand);
   const modelSales = modelTable.length > 1 ? parseModelSalesTable(modelTable) : [];
+  const stock = stockTable.length > 1 ? parseStockTable(stockTable) : [];
   if (!salesRows.length) throw new Error("Google Sheet has no valid Daily_Sales rows");
 
   const latest = salesRows.map((row) => row.date).sort().at(-1)!;
@@ -403,6 +455,7 @@ export async function loadGoogleSheetData(): Promise<DashboardData> {
     shops,
     sales: salesRows,
     modelSales,
+    stock,
     comparison: fallbackData.comparison,
   };
 }
