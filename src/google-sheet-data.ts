@@ -186,6 +186,81 @@ async function fetchSheetPage(sheetName: string, tableQuery?: string): Promise<s
   });
 }
 
+function previousMonthPrefix(monthPrefix: string) {
+  const [year, month] = monthPrefix.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 2, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export function dashboardMonths(source: DashboardData) {
+  return [...new Set([...source.sales, ...source.modelSales].map((row) => row.date.slice(0, 7)).filter(Boolean))]
+    .sort((a, b) => b.localeCompare(a));
+}
+
+export function dashboardForMonth(source: DashboardData, monthPrefix: string): DashboardData {
+  const [year, month] = monthPrefix.split("-").map(Number);
+  const days = new Date(year, month, 0).getDate();
+  const previousPrefix = previousMonthPrefix(monthPrefix);
+  const monthSales = source.sales.filter((sale) => sale.date.startsWith(monthPrefix));
+  const monthModelSales = source.modelSales.filter((sale) => sale.date.startsWith(monthPrefix));
+  const availableDates = [...monthSales.map((sale) => sale.date), ...monthModelSales.map((sale) => sale.date)].sort();
+  const latest = availableDates.at(-1) ?? `${monthPrefix}-01`;
+  const sourceMonth = source.latest.slice(0, 7);
+  const fallbackMonth = fallbackData.latest.slice(0, 7);
+  const targetSource = monthPrefix === sourceMonth
+    ? source.shops
+    : monthPrefix === fallbackMonth
+      ? fallbackData.shops
+      : [];
+  const targetByKey = new Map(targetSource.map((row) => [`${row.code}|${row.brand}`, row]));
+  const seeds = new Map<string, { code: string; shop: string; brand: string }>();
+
+  targetSource.forEach((row) => seeds.set(`${row.code}|${row.brand}`, { code: row.code, shop: row.shop, brand: row.brand }));
+  monthSales.forEach((sale) => seeds.set(`${sale.code}|${sale.brand}`, { code: sale.code, shop: sale.shop || sale.code, brand: sale.brand }));
+
+  const shops: ShopRow[] = [...seeds.values()].map((seed) => {
+    const target = targetByKey.get(`${seed.code}|${seed.brand}`);
+    const row: ShopRow = {
+      ...emptyRow(days),
+      ...seed,
+      targetQty: target?.targetQty ?? 0,
+      targetNet: target?.targetNet ?? 0,
+    };
+    for (const sale of source.sales) {
+      if (sale.code !== seed.code || sale.brand !== seed.brand) continue;
+      const saleMonth = sale.date.slice(0, 7);
+      const day = Number(sale.date.slice(-2)) - 1;
+      if (saleMonth === monthPrefix) {
+        row.dailyQty[day] += sale.qty;
+        row.dailyNet[day] += sale.net;
+      } else if (saleMonth === previousPrefix && day < days) {
+        row.previousDailyQty![day] += sale.qty;
+        row.previousDailyNet![day] += sale.net;
+      }
+    }
+    return row;
+  });
+
+  const preferredOrder = fallbackData.brands.map((row) => row.brand);
+  const brandNames = [...new Set(shops.map((row) => row.brand))].sort((a, b) => {
+    const aIndex = preferredOrder.indexOf(a);
+    const bIndex = preferredOrder.indexOf(b);
+    return (aIndex < 0 ? 999 : aIndex) - (bIndex < 0 ? 999 : bIndex) || a.localeCompare(b);
+  });
+  const brands: BrandRow[] = brandNames.map((brand) => ({ brand, ...combineRows(shops.filter((row) => row.brand === brand), days) }));
+  const monthName = new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "Asia/Bangkok" })
+    .format(new Date(`${monthPrefix}-01T00:00:00+07:00`));
+
+  return {
+    ...source,
+    month: monthName,
+    latest,
+    totals: combineRows(shops, days),
+    brands,
+    shops,
+  };
+}
+
 async function fetchModelSheet(): Promise<string[][]> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 60_000);

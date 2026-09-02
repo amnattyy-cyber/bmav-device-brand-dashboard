@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DailySale, type DataRow } from "./google-sheet-data";
+import { dashboardForMonth, dashboardMonths, fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DailySale, type DataRow } from "./google-sheet-data";
 import { clampModelSalesDateRange, modelSaleKey, modelShopInsight, summarizeModelSales } from "./model-sales";
 import { comparableWeekPeriod, previousWeekId, shortDateRange, weekDataStatus, weekIndexForDate, weekRanges, wowChangeRate } from "./wow-periods";
 
@@ -9,7 +9,7 @@ type Metric = "net" | "qty";
 type ViewMode = "day" | "mtd" | "achieve" | "runrate";
 type MatrixRanking = "rank" | "achieve" | "runrate";
 type SourceStatus = "loading" | "live" | "fallback";
-type ModelTableCapture = "overview" | "shop-wow" | "branch" | "top-models" | "daily-sales" | null;
+type ModelTableCapture = "focus-models" | "overview" | "shop-wow" | "branch" | "top-models" | "daily-sales" | null;
 type WeekSnapshot = { net: number; qty: number };
 type ViewMetrics = {
   monthlyTarget: number;
@@ -25,6 +25,15 @@ const brandColors: Record<string, string> = {
   OPPO: "#16a34a", XIAOMI: "#f97316", HUAWEI: "#e11d48", HONOR: "#0891b2",
   INFINIX: "#65a30d", NOTHING: "#111827", REALME: "#eab308", ALLDOCUBE: "#64748b",
 };
+
+const focusModels = [
+  { key: "samsung-a06-5g", label: "Samsung A06 5G", brand: "SAMSUNG", match: (model: string) => /GALAXY A06 5G/i.test(model) },
+  { key: "oppo-a6c", label: "OPPO A6C", brand: "OPPO", match: (model: string) => /OPPO A6C/i.test(model) },
+  { key: "vivo-y05", label: "vivo Y05", brand: "VIVO", match: (model: string) => /VIVO Y05/i.test(model) },
+  { key: "xiaomi-redmi-a7-pro", label: "Xiaomi Redmi A7 Pro", brand: "XIAOMI", match: (model: string) => /REDMI A7 PRO/i.test(model) },
+  { key: "honor-x5c", label: "Honor X5c", brand: "HONOR", match: (model: string) => /HONOR X5C/i.test(model) },
+  { key: "infinix-smart20", label: "Infinix Smart20", brand: "INFINIX", match: (model: string) => /INFINIX SMART\s*20/i.test(model) },
+] as const;
 
 const number = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 1 });
 const integer = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 });
@@ -87,7 +96,10 @@ function momTone(current: number, previous: number) {
 }
 
 export default function Home() {
-  const [data, setData] = useState(fallbackData);
+  const [sourceData, setSourceData] = useState(fallbackData);
+  const [selectedMonth, setSelectedMonth] = useState(fallbackData.latest.slice(0, 7));
+  const availableMonths = useMemo(() => dashboardMonths(sourceData), [sourceData]);
+  const data = useMemo(() => dashboardForMonth(sourceData, selectedMonth), [selectedMonth, sourceData]);
   const [sourceStatus, setSourceStatus] = useState<SourceStatus>("loading");
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [metric, setMetric] = useState<Metric>("net");
@@ -108,6 +120,7 @@ export default function Home() {
   const [matrixSortBrand, setMatrixSortBrand] = useState("ALL");
   const [matrixCapture, setMatrixCapture] = useState(false);
   const [modelTableCapture, setModelTableCapture] = useState<ModelTableCapture>(null);
+  const hasLoadedLiveData = useRef(false);
   const previousLatestDate = useRef(fallbackData.latest);
   const previousModelSalesLatestDate = useRef(fallbackData.latest);
   const latestDay = Number(data.latest.slice(-2));
@@ -115,13 +128,21 @@ export default function Home() {
   const [yearNumber, monthNumber] = monthPrefix.split("-").map(Number);
   const daysInMonth = new Date(yearNumber, monthNumber, 0).getDate();
   const previousMonthDays = new Date(yearNumber, monthNumber - 1, 0).getDate();
+  const shortMonth = new Intl.DateTimeFormat("en-GB", { month: "short" }).format(new Date(`${monthPrefix}-01T00:00:00Z`));
+  const previousMonthName = new Intl.DateTimeFormat("en-GB", { month: "short" }).format(new Date(Date.UTC(yearNumber, monthNumber - 2, 1)));
+  const visibleWeekRanges = weekRanges.map((range, index) => ({ range, index })).filter(({ range }) => range.start.slice(0, 7) === monthPrefix || range.end.slice(0, 7) === monthPrefix);
   const formatDate = useCallback((day: number) => `${monthPrefix}-${String(day).padStart(2, "0")}`, [monthPrefix]);
   const thaiDate = useCallback((day: number) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${formatDate(day)}T00:00:00+07:00`)), [formatDate]);
 
   const refreshData = useCallback(async () => {
     try {
       const liveData = await loadGoogleSheetData();
-      setData(liveData);
+      setSourceData(liveData);
+      setSelectedMonth((current) => {
+        const next = !hasLoadedLiveData.current || !dashboardMonths(liveData).includes(current) ? liveData.latest.slice(0, 7) : current;
+        hasLoadedLiveData.current = true;
+        return next;
+      });
       setSourceStatus("live");
       setLastSync(new Date());
     } catch (error) {
@@ -540,10 +561,8 @@ export default function Home() {
   }, [data.latest, data.modelSales, data.sales, data.shops, formatDate, modelBrand, modelQuery, modelSort, monthPrefix, selectedDay, selectedModelKeys, selectedShops, selectedWeek]);
 
   const modelSalesDateBounds = useMemo(() => {
-    const dates = data.modelSales.map((sale) => sale.date).filter(Boolean).sort();
-    const earliestMonth = (dates[0] ?? data.latest).slice(0, 7);
-    return { min: `${earliestMonth}-01`, max: data.latest };
-  }, [data.latest, data.modelSales]);
+    return { min: `${monthPrefix}-01`, max: data.latest };
+  }, [data.latest, monthPrefix]);
 
   useEffect(() => {
     const priorLatest = previousModelSalesLatestDate.current;
@@ -615,6 +634,29 @@ export default function Home() {
       previousDateLabel,
     };
   }, [activeModelSalesDates, data.modelSales, formatDate, modelBrand, modelPerformance.modelOptions, modelShopOptions, modelSort, selectedDay, selectedModelKeys, selectedShops]);
+
+  const focusModelMonitor = useMemo(() => {
+    const selectedDate = formatDate(selectedDay);
+    const scoped = data.modelSales.filter((sale) => sale.date >= `${monthPrefix}-01` && sale.date <= selectedDate && (selectedShops.length === 0 || selectedShops.includes(sale.code)));
+    const definitionFor = (model: string) => focusModels.find((definition) => definition.match(model));
+    const mapped = scoped.map((sale) => ({ sale, definition: definitionFor(sale.model) })).filter((item): item is typeof item & { definition: typeof focusModels[number] } => Boolean(item.definition));
+    const rows = focusModels.map((definition) => {
+      const sales = mapped.filter((item) => item.definition.key === definition.key).map((item) => item.sale);
+      const total = salesSnapshot(sales, `${monthPrefix}-01`, selectedDate);
+      const latest = salesSnapshot(sales, selectedDate, selectedDate);
+      return { ...definition, total, latest, activeShops: new Set(sales.map((sale) => sale.code)).size };
+    });
+    const daily = Array.from({ length: selectedDay }, (_, index) => {
+      const date = formatDate(index + 1);
+      const values = Object.fromEntries(focusModels.map((definition) => {
+        const sales = mapped.filter((item) => item.definition.key === definition.key && item.sale.date === date).map((item) => item.sale);
+        return [definition.key, salesSnapshot(sales, date, date)];
+      }));
+      return { date, values, total: Object.values(values).reduce((sum, value) => ({ qty: sum.qty + value.qty, net: sum.net + value.net }), { qty: 0, net: 0 }) };
+    });
+    const total = rows.reduce((sum, row) => ({ qty: sum.qty + row.total.qty, net: sum.net + row.total.net }), { qty: 0, net: 0 });
+    return { rows, daily, total };
+  }, [data.modelSales, formatDate, monthPrefix, selectedDay, selectedShops]);
   const modelTrendMax = Math.max(...modelPerformance.trend.map((item) => item[modelSort]), 1);
   const modelColor = brandColors[modelBrand] ?? "#7c3aed";
   const modelSelectionLabel = selectedModelKeys.length === 0
@@ -761,6 +803,7 @@ export default function Home() {
 
       <section className="filter-dock shell" aria-label="ตัวกรอง Dashboard">
         <div className="filter-group metric-filter"><span className="filter-label">มุมมองหลัก</span><div className="segmented"><button className={metric === "net" ? "selected" : ""} onClick={() => setMetric("net")}>Net Amount</button><button className={metric === "qty" ? "selected" : ""} onClick={() => setMetric("qty")}>Qty</button></div></div>
+        <div className="filter-group"><label htmlFor="month-filter">Month</label><select id="month-filter" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>{availableMonths.map((month) => <option key={month} value={month}>{new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(`${month}-01T00:00:00Z`))}</option>)}</select></div>
         <div className="filter-group"><label htmlFor="brand-filter">Brand</label><select id="brand-filter" value={selectedBrand} onChange={(event) => chooseBrand(event.target.value)}><option value="ALL">ALL BRANDS</option>{data.brands.map((row) => <option key={row.brand} value={row.brand}>{row.brand}</option>)}</select></div>
         <div className="filter-group shop-filter"><span className="filter-label">สาขา</span><details className="shop-multiselect"><summary><span>{selectedShops.length === 0 ? "ทุกสาขาที่มี Target หรือยอดขาย" : `${selectedShops.length} สาขาที่เลือก`}</span><b aria-hidden="true">⌄</b></summary><div className="shop-menu"><label className="shop-option all-shops"><input type="checkbox" checked={selectedShops.length === 0} onChange={() => setSelectedShops([])} /><span>ทุกสาขาที่มี Target หรือยอดขาย</span></label><div className="shop-option-list">{shopOptions.map(([code, shop]) => <label className="shop-option" key={code}><input type="checkbox" checked={selectedShops.includes(code)} onChange={() => toggleShop(code)} /><span>{shop}</span></label>)}</div></div></details></div>
         <div className="filter-group performance-filter"><span className="filter-label">Performance</span><div className="segmented performance-segmented"><button className={viewMode === "mtd" ? "selected" : ""} onClick={() => setViewMode("mtd")}>MTD</button><button className={viewMode === "achieve" ? "selected" : ""} onClick={() => setViewMode("achieve")}>Achieve TD</button><button className={viewMode === "runrate" ? "selected" : ""} onClick={() => setViewMode("runrate")}>Run Rate</button><button className={viewMode === "day" ? "selected" : ""} onClick={() => setViewMode("day")}>Daily</button></div></div>
@@ -772,7 +815,7 @@ export default function Home() {
       <section className="section wow-section shell" aria-labelledby="wow-title">
         <div className="section-heading wow-heading"><div><span className="section-number">WOW</span><h2 id="wow-title">Performance WoW</h2><p>{wow.range.id}: {shortDateRange(wow.period.currentStart, wow.period.currentEnd)} • เทียบฐาน {shortDateRange(wow.period.baseStart, wow.period.baseEnd)} • {weekDataStatus(wow.period)}</p></div><span className={`wow-status ${activeWowTone}`}>WoW {metric === "net" ? "Net" : "Qty"} {wowRateLabel(activeWowRate)}</span></div>
         <div className="week-picker" role="group" aria-label="เลือกช่วง Week on Week">
-          {weekRanges.map((range, index) => {
+          {visibleWeekRanges.map(({ range, index }) => {
             const period = comparableWeekPeriod(range, data.latest);
             return <button key={range.id} className={selectedWeek === index ? "selected" : ""} onClick={() => setSelectedWeek(index)} disabled={period.currentDays === 0}><span>{range.id}</span><small>{range.label}</small><em>{weekDataStatus(period)}</em></button>;
           })}
@@ -818,13 +861,13 @@ export default function Home() {
 
       <section className="kpi-grid shell">
         <article className="kpi-card purple"><div className="kpi-icon">T</div><span>{modeCopy.target} {metricLabel}</span><strong>{displayValue(target)}</strong><small>{viewMode === "day" ? "เป้าหมายเฉลี่ยต่อวัน" : viewMode === "runrate" ? "เป้าหมายเต็มเดือน" : `เป้าหมายสะสม ${selectedDay} วัน`}</small></article>
-        <article className="kpi-card blue"><div className="kpi-icon">A</div><span>{modeCopy.actual} {metricLabel}</span><strong>{displayValue(actual)}</strong><small>{viewMode === "day" ? `ยอดขายวันที่ ${selectedDay} Aug` : viewMode === "runrate" ? `ประมาณการจากยอดสะสม ${selectedDay} วัน` : "ยอดขายสะสมถึงวันที่เลือก"}</small></article>
+        <article className="kpi-card blue"><div className="kpi-icon">A</div><span>{modeCopy.actual} {metricLabel}</span><strong>{displayValue(actual)}</strong><small>{viewMode === "day" ? `ยอดขายวันที่ ${selectedDay} ${shortMonth}` : viewMode === "runrate" ? `ประมาณการจากยอดสะสม ${selectedDay} วัน` : "ยอดขายสะสมถึงวันที่เลือก"}</small></article>
         <article className="kpi-card orange"><div className="kpi-icon">%</div><span>{modeCopy.achievement}</span><strong>{achievement.toFixed(1)}%</strong><small>{viewMode === "runrate" ? "คาดการณ์เทียบ Target เต็มเดือน" : viewMode === "day" ? "เทียบ Target Daily" : "เทียบ Target ถึงปัจจุบัน"}</small></article>
         <article className="kpi-card green"><div className="kpi-icon">G</div><span>{modeCopy.gap}</span><strong>{displayValue(actual - target)}</strong><small>{actual >= target ? "สูงกว่าเป้าหมาย" : `ยังขาด ${unit}`}</small></article>
       </section>
 
       <section className="section shell">
-        <div className="section-heading"><div><span className="section-number">01</span><h2>Performance by Brand</h2><p>{metricLabel} • {modeCopy.title} • {shopName} • MoM vs Jul<br /><span className="brand-wow-context">{wow.range.id}: {shortDateRange(wow.period.currentStart, wow.period.currentEnd)} เทียบ {shortDateRange(wow.period.baseStart, wow.period.baseEnd)} • จำนวนวันเท่ากัน {wow.period.currentDays} วัน</span></p></div><div className="legend"><i className="target" /> {modeCopy.target} <i className="actual" /> {modeCopy.actual}</div></div>
+        <div className="section-heading"><div><span className="section-number">01</span><h2>Performance by Brand</h2><p>{metricLabel} • {modeCopy.title} • {shopName} • MoM vs {previousMonthName}<br /><span className="brand-wow-context">{wow.range.id}: {shortDateRange(wow.period.currentStart, wow.period.currentEnd)} เทียบ {shortDateRange(wow.period.baseStart, wow.period.baseEnd)} • จำนวนวันเท่ากัน {wow.period.currentDays} วัน</span></p></div><div className="legend"><i className="target" /> {modeCopy.target} <i className="actual" /> {modeCopy.actual}</div></div>
         <div className="brand-grid">
           {brandViews.map((item) => {
             const color = brandColors[item.brand] ?? "#64748b";
@@ -843,18 +886,18 @@ export default function Home() {
 
       <section className="section split-section shell">
         <div className="trend-panel panel">
-          <div className="panel-head"><div><span className="section-number">02</span><h2>Daily Trend</h2><p>{metric === "net" ? "Net Amount" : "Qty"} • ยอดขายจริงรายวัน 1–{selectedDay} Aug</p></div><div className="trend-legend"><span><i className="actual-dot" /> Daily Sales</span></div></div>
+          <div className="panel-head"><div><span className="section-number">02</span><h2>Daily Trend</h2><p>{metric === "net" ? "Net Amount" : "Qty"} • ยอดขายจริงรายวัน 1–{selectedDay} {shortMonth}</p></div><div className="trend-legend"><span><i className="actual-dot" /> Daily Sales</span></div></div>
           <div className="daily-chart" aria-label="กราฟยอดขายรายวัน">
-            {trend.map((item) => <div className="day-column" key={item.day} aria-label={`${item.day} Aug: ${displayValue(item.actual)}`}><div className="bar-space"><div className="actual-bar" title={`${item.day} Aug: ${displayValue(item.actual)}`} style={{ height: `${(item.actual / trendMax) * 100}%`, background: selectedColor }}><span>{metric === "net" ? compactChart(item.actual) : number.format(item.actual)}</span></div></div><small>{item.day}</small></div>)}
+            {trend.map((item) => <div className="day-column" key={item.day} aria-label={`${item.day} ${shortMonth}: ${displayValue(item.actual)}`}><div className="bar-space"><div className="actual-bar" title={`${item.day} ${shortMonth}: ${displayValue(item.actual)}`} style={{ height: `${(item.actual / trendMax) * 100}%`, background: selectedColor }}><span>{metric === "net" ? compactChart(item.actual) : number.format(item.actual)}</span></div></div><small>{item.day}</small></div>)}
           </div>
-          <div className="trend-foot"><span>1 Aug</span><b>ยอดขายรวม 1–{selectedDay} Aug {displayValue(trendTotal)}</b><span>{selectedDay} Aug</span></div>
+          <div className="trend-foot"><span>1 {shortMonth}</span><b>ยอดขายรวม 1–{selectedDay} {shortMonth} {displayValue(trendTotal)}</b><span>{selectedDay} {shortMonth}</span></div>
         </div>
         <aside className="focus-panel panel"><span className="section-number">PERFORMANCE FOCUS</span><h2>{metricLabel}</h2><p>{selectedBrand === "ALL" ? "ALL BRANDS" : selectedBrand} • {shopName}</p><div className="focus-meter"><span style={{ width: `${Math.min(achievement, 100)}%`, background: selectedColor }} /></div><div className="focus-stats"><span><small>{modeCopy.actual}</small><strong>{displayValue(actual)}</strong><small>{modeCopy.title}</small></span><span><small>{modeCopy.target}</small><strong>{displayValue(target)}</strong><small>{modeCopy.title}</small></span></div><div className="pace-note"><span>{modeCopy.short}</span><p>{viewMode === "runrate" ? `ประมาณการสิ้นเดือนจากยอดขายเฉลี่ย ${selectedDay} วัน` : `ข้อมูลถึงวันที่ ${thaiDate(selectedDay)}`} • เลือก Net Amount / Qty ได้ทันที</p></div></aside>
       </section>
 
       <section className={`section model-area-section shell ${matrixCapture ? "capture-mode" : ""}`} aria-labelledby="model-area-title">
         <div className="section-heading model-area-heading">
-          <div><span className="section-number">03</span><h2 id="model-area-title">Brand x Shop · Ranking</h2><p>Top {modelAreaMatrix.topBrands.length} Brand ตาม {modeCopy.actual} {metricLabel} • {viewMode === "day" ? `วันที่ ${selectedDay} Aug` : viewMode === "runrate" ? `ประมาณการสิ้นเดือนจากยอดสะสมถึง ${selectedDay} Aug` : `ยอดสะสมถึง ${selectedDay} Aug`} • รวมสาขาที่ไม่มี Target แต่มียอดขาย</p></div>
+          <div><span className="section-number">03</span><h2 id="model-area-title">Brand x Shop · Ranking</h2><p>Top {modelAreaMatrix.topBrands.length} Brand ตาม {modeCopy.actual} {metricLabel} • {viewMode === "day" ? `วันที่ ${selectedDay} ${shortMonth}` : viewMode === "runrate" ? `ประมาณการสิ้นเดือนจากยอดสะสมถึง ${selectedDay} ${shortMonth}` : `ยอดสะสมถึง ${selectedDay} ${shortMonth}`} • รวมสาขาที่ไม่มี Target แต่มียอดขาย</p></div>
           <div className="matrix-actions"><button className={`capture-view-button ${matrixCapture ? "active" : ""}`} type="button" aria-pressed={matrixCapture} onClick={toggleMatrixCapture}><span aria-hidden="true">{matrixCapture ? "×" : "▣"}</span>{matrixCapture ? "ออกจาก Capture" : "Capture View"}</button><div className="matrix-ranking-control" role="group" aria-label="เลือกเกณฑ์จัดอันดับสี"><span>จัดสีตามอันดับ</span><div className="segmented"><button className={matrixRanking === "rank" ? "selected" : ""} onClick={() => setMatrixRanking("rank")}>Rank</button><button className={matrixRanking === "achieve" ? "selected" : ""} onClick={() => setMatrixRanking("achieve")}>% Ach</button><button className={matrixRanking === "runrate" ? "selected" : ""} onClick={() => setMatrixRanking("runrate")}>%Runrate</button></div></div></div>
         </div>
         <div className="matrix-legend"><span><i className="matrix-swatch best" /> อันดับสูง</span><span><i className="matrix-swatch middle" /> กลาง</span><span><i className="matrix-swatch low" /> ต้องเร่ง</span><small>{matrixCapture ? "Capture View แสดงทุก Brand ในภาพเดียว • กด Esc เพื่อออก" : "คลิกชื่อคอลัมน์เพื่อเรียงสาขา • เลื่อนเมาส์ที่ตัวเลขเพื่อดูยอด, Run Rate และ Target"}</small></div>
@@ -884,11 +927,21 @@ export default function Home() {
         {!data.modelSales.length ? <div className="model-empty-state"><strong>ยังไม่พบข้อมูลรุ่นจาก Google Sheet</strong><span>Dashboard ส่วน Brand ยังคงใช้งานได้ และระบบจะลองเชื่อม Daily_Sales_Model ใหม่อัตโนมัติทุก 5 นาที</span></div> : <>
           <div className="model-focus-strip">
             <article><span>Model Scope</span><strong>{modelSelectionLabel}</strong><small>{modelBrand} • {shopModelSales.scopeLabel}</small></article>
-            <article><span>Daily · {selectedDay} Aug</span><strong>{integer.format(modelPerformance.daily.qty)} เครื่อง</strong><small>Net ฿{integer.format(modelPerformance.daily.net)}</small></article>
+            <article><span>Daily · {selectedDay} {shortMonth}</span><strong>{integer.format(modelPerformance.daily.qty)} เครื่อง</strong><small>Net ฿{integer.format(modelPerformance.daily.net)}</small></article>
             <article><span>{modelPerformance.range.id} · {modelPerformance.period.currentDays} วัน</span><strong>{integer.format(modelPerformance.current.qty)} เครื่อง</strong><small>Net ฿{integer.format(modelPerformance.current.net)}</small></article>
             <article><span>%WoW Qty / Net</span><strong><em className={`model-rate ${comparisonTone(modelPerformance.wowQty)}`}>{wowRateLabel(modelPerformance.wowQty)}</em><em className={`model-rate ${comparisonTone(modelPerformance.wowNet)}`}>{wowRateLabel(modelPerformance.wowNet)}</em></strong><small>เทียบจำนวนวันเท่ากัน</small></article>
-            <article><span>สาขาที่มียอด MTD</span><strong>{modelPerformance.sellingShops}/{modelPerformance.totalShops}</strong><small>สาขา • ถึง {selectedDay} Aug</small></article>
+            <article><span>สาขาที่มียอด MTD</span><strong>{modelPerformance.sellingShops}/{modelPerformance.totalShops}</strong><small>สาขา • ถึง {selectedDay} {shortMonth}</small></article>
           </div>
+
+          <section className={`focus-model-monitor-card ${modelTableCapture === "focus-models" ? "model-capture-target" : ""}`} aria-labelledby="focus-model-monitor-title">
+            <header><div><span>MODEL FOCUS · DAILY MONITOR</span><h3 id="focus-model-monitor-title">ยอดขายรายวัน 6 รุ่น Focus</h3><p>{data.month} • 1–{selectedDay} {shortMonth} • {shopName}</p></div><div className="model-card-actions"><p>ในแต่ละช่องแสดง QTY และ Net Amount</p>{captureButton("focus-models", "focus-model-monitor-title")}</div></header>
+            <div className="focus-model-summary">{focusModelMonitor.rows.map((row) => <article key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}><span>{row.label}</span><strong>{integer.format(row.total.qty)} เครื่อง</strong><small>Net ฿{integer.format(row.total.net)} • {row.activeShops} สาขา</small></article>)}</div>
+            <div className="focus-model-table-wrap"><table className="focus-model-table">
+              <thead><tr><th>Date</th>{focusModelMonitor.rows.map((row) => <th key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.label}<small>{row.brand}</small></th>)}<th>Total Focus</th></tr></thead>
+              <tbody>{focusModelMonitor.daily.map((row) => <tr key={row.date}><th>{compactDate(row.date)}</th>{focusModelMonitor.rows.map((model) => { const value = row.values[model.key]; return <td key={model.key}><strong>{integer.format(value.qty)}</strong><small>฿{integer.format(value.net)}</small></td>; })}<td className="focus-daily-total"><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td></tr>)}</tbody>
+              <tfoot><tr><th>MTD Total</th>{focusModelMonitor.rows.map((row) => <td key={row.key}><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td>)}<td><strong>{integer.format(focusModelMonitor.total.qty)}</strong><small>฿{integer.format(focusModelMonitor.total.net)}</small></td></tr></tfoot>
+            </table></div>
+          </section>
 
           <section className={`model-area-card ${modelTableCapture === "overview" ? "model-capture-target" : ""}`} aria-labelledby="model-area-overview-title">
             <header><div><span>BY AREA · SELECTED MODELS</span><h3 id="model-area-overview-title">ภาพรวม Performance รายรุ่น</h3></div><div className="model-card-actions"><p>{modelPerformance.rows.length} รุ่น • ตัวกรองด้านบนใช้กับทุกตาราง</p>{captureButton("overview", "model-area-overview-title")}</div></header>
@@ -900,9 +953,9 @@ export default function Home() {
 
           <div className="model-detail-grid">
             <section className="model-daily-card">
-              <header><div><span>DAILY TREND · BY AREA</span><h3>{modelSelectionLabel}</h3></div><p>{modelSort === "net" ? "Net Amount" : "QTY"} • 1–{selectedDay} Aug</p></header>
+              <header><div><span>DAILY TREND · BY AREA</span><h3>{modelSelectionLabel}</h3></div><p>{modelSort === "net" ? "Net Amount" : "QTY"} • 1–{selectedDay} {shortMonth}</p></header>
               <div className="model-daily-chart">{modelPerformance.trend.map((item) => <div className="model-day-column" key={item.day}><div><i style={{ height: `${(item[modelSort] / modelTrendMax) * 100}%`, background: modelColor }}><span>{modelSort === "net" ? compactChart(item.net) : integer.format(item.qty)}</span></i></div><small>{item.day}</small></div>)}</div>
-              <footer><span>1 Aug</span><b>MTD {integer.format(modelPerformance.mtd.qty)} เครื่อง • ฿{integer.format(modelPerformance.mtd.net)}</b><span>{selectedDay} Aug</span></footer>
+              <footer><span>1 {shortMonth}</span><b>MTD {integer.format(modelPerformance.mtd.qty)} เครื่อง • ฿{integer.format(modelPerformance.mtd.net)}</b><span>{selectedDay} {shortMonth}</span></footer>
             </section>
 
             <section className={`model-shop-card ${modelTableCapture === "shop-wow" ? "model-capture-target" : ""}`}>
@@ -957,7 +1010,7 @@ export default function Home() {
       </section>
 
       <section className="section shop-performance-section shell">
-        <div className="section-heading shop-heading"><div><span className="section-number">04</span><h2>Shop Performance</h2><p>{selectedBrand === "ALL" ? "สาขาที่มี Target หรือยอดขายใน BMAV" : `สาขาที่มี Target หรือยอดขาย ${selectedBrand}`} • {modeCopy.title} • MoM เทียบ Jul</p></div><span className="shop-count">{shopViews.length} สาขา</span></div>
+        <div className="section-heading shop-heading"><div><span className="section-number">04</span><h2>Shop Performance</h2><p>{selectedBrand === "ALL" ? "สาขาที่มี Target หรือยอดขายใน BMAV" : `สาขาที่มี Target หรือยอดขาย ${selectedBrand}`} • {modeCopy.title} • MoM เทียบ {previousMonthName}</p></div><span className="shop-count">{shopViews.length} สาขา</span></div>
         <section className="shop-brand-wow-card" aria-labelledby="shop-brand-wow-title" style={{ "--shop-wow-brand": brandColors[shopBrandWow.brand] ?? "#64748b" } as React.CSSProperties}>
           <header className="shop-brand-wow-head">
             <div><span>SHOP · WEEK COMPARISON</span><h3 id="shop-brand-wow-title">Performance WoW รายสาขา</h3><p>{shopBrandWow.previousWeek} {shortDateRange(shopBrandWow.period.baseStart, shopBrandWow.period.baseEnd)} เทียบ {shopBrandWow.range.id} {shortDateRange(shopBrandWow.period.currentStart, shopBrandWow.period.currentEnd)} • {shopBrandWow.period.currentDays} วันเท่ากัน • แสดงสาขา No Target ครบ</p></div>

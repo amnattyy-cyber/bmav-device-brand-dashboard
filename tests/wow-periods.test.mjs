@@ -42,6 +42,14 @@ test("a complete Week 36 uses all seven days", () => {
   assert.equal(period.complete, true);
 });
 
+test("September continues with Week 37 and equal comparison days", () => {
+  assert.deepEqual(weekRanges[5], { id: "Week 37", start: "2026-09-07", end: "2026-09-13", label: "7–13 Sep" });
+  const period = comparableWeekPeriod(weekRanges[5], "2026-09-09");
+  assert.equal(period.currentDays, 3);
+  assert.equal(period.baseStart, "2026-08-31");
+  assert.equal(period.baseEnd, "2026-09-02");
+});
+
 test("a future week is unavailable", () => {
   const period = comparableWeekPeriod(weekRanges[4], "2026-08-24");
   assert.equal(period.currentEnd, null);

@@ -18,13 +18,11 @@ export type ComparableWeekPeriod = {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export const weekRanges: WeekRange[] = [
-  { id: "Week 32", start: "2026-08-03", end: "2026-08-09", label: "3–9 Aug" },
-  { id: "Week 33", start: "2026-08-10", end: "2026-08-16", label: "10–16 Aug" },
-  { id: "Week 34", start: "2026-08-17", end: "2026-08-23", label: "17–23 Aug" },
-  { id: "Week 35", start: "2026-08-24", end: "2026-08-30", label: "24–30 Aug" },
-  { id: "Week 36", start: "2026-08-31", end: "2026-09-06", label: "31 Aug–6 Sep" },
-];
+export const weekRanges: WeekRange[] = Array.from({ length: 22 }, (_, index) => {
+  const start = addDays("2026-08-03", index * 7);
+  const end = addDays(start, 6);
+  return { id: `Week ${32 + index}`, start, end, label: shortDateRange(start, end) };
+});
 
 export function previousWeekId(weekId: string) {
   const weekNumber = Number(weekId.match(/\d+/)?.[0]);
