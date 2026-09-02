@@ -9,7 +9,7 @@ type Metric = "net" | "qty";
 type ViewMode = "day" | "mtd" | "achieve" | "runrate";
 type MatrixRanking = "rank" | "achieve" | "runrate";
 type SourceStatus = "loading" | "live" | "fallback";
-type ModelTableCapture = "focus-models" | "overview" | "shop-wow" | "branch" | "top-models" | "daily-sales" | null;
+type ModelTableCapture = "focus-models" | "focus-shops" | "overview" | "shop-wow" | "branch" | "top-models" | "daily-sales" | null;
 type WeekSnapshot = { net: number; qty: number };
 type ViewMetrics = {
   monthlyTarget: number;
@@ -655,8 +655,19 @@ export default function Home() {
       return { date, values, total: Object.values(values).reduce((sum, value) => ({ qty: sum.qty + value.qty, net: sum.net + value.net }), { qty: 0, net: 0 }) };
     });
     const total = rows.reduce((sum, row) => ({ qty: sum.qty + row.total.qty, net: sum.net + row.total.net }), { qty: 0, net: 0 });
-    return { rows, daily, total };
-  }, [data.modelSales, formatDate, monthPrefix, selectedDay, selectedShops]);
+    const shopRows = modelShopOptions
+      .filter(([code]) => selectedShops.length === 0 || selectedShops.includes(code))
+      .map(([code, shop]) => {
+        const values = Object.fromEntries(focusModels.map((definition) => {
+          const sales = mapped.filter((item) => item.definition.key === definition.key && item.sale.code === code).map((item) => item.sale);
+          return [definition.key, salesSnapshot(sales, `${monthPrefix}-01`, selectedDate)];
+        }));
+        const shopTotal = Object.values(values).reduce((sum, value) => ({ qty: sum.qty + value.qty, net: sum.net + value.net }), { qty: 0, net: 0 });
+        return { code, shop, values, total: shopTotal };
+      })
+      .sort((a, b) => b.total[modelSort] - a.total[modelSort] || a.shop.localeCompare(b.shop));
+    return { rows, daily, shopRows, total };
+  }, [data.modelSales, formatDate, modelShopOptions, modelSort, monthPrefix, selectedDay, selectedShops]);
   const modelTrendMax = Math.max(...modelPerformance.trend.map((item) => item[modelSort]), 1);
   const modelColor = brandColors[modelBrand] ?? "#7c3aed";
   const modelSelectionLabel = selectedModelKeys.length === 0
@@ -933,13 +944,22 @@ export default function Home() {
             <article><span>สาขาที่มียอด MTD</span><strong>{modelPerformance.sellingShops}/{modelPerformance.totalShops}</strong><small>สาขา • ถึง {selectedDay} {shortMonth}</small></article>
           </div>
 
-          <section className={`focus-model-monitor-card ${modelTableCapture === "focus-models" ? "model-capture-target" : ""}`} aria-labelledby="focus-model-monitor-title">
+          <section className={`focus-model-monitor-card focus-model-daily-card ${modelTableCapture === "focus-models" ? "model-capture-target" : ""}`} aria-labelledby="focus-model-monitor-title">
             <header><div><span>MODEL FOCUS · DAILY MONITOR</span><h3 id="focus-model-monitor-title">ยอดขายรายวัน 6 รุ่น Focus</h3><p>{data.month} • 1–{selectedDay} {shortMonth} • {shopName}</p></div><div className="model-card-actions"><p>ในแต่ละช่องแสดง QTY และ Net Amount</p>{captureButton("focus-models", "focus-model-monitor-title")}</div></header>
             <div className="focus-model-summary">{focusModelMonitor.rows.map((row) => <article key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}><span>{row.label}</span><strong>{integer.format(row.total.qty)} เครื่อง</strong><small>Net ฿{integer.format(row.total.net)} • {row.activeShops} สาขา</small></article>)}</div>
             <div className="focus-model-table-wrap"><table className="focus-model-table">
               <thead><tr><th>Date</th>{focusModelMonitor.rows.map((row) => <th key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.label}<small>{row.brand}</small></th>)}<th>Total Focus</th></tr></thead>
               <tbody>{focusModelMonitor.daily.map((row) => <tr key={row.date}><th>{compactDate(row.date)}</th>{focusModelMonitor.rows.map((model) => { const value = row.values[model.key]; return <td key={model.key}><strong>{integer.format(value.qty)}</strong><small>฿{integer.format(value.net)}</small></td>; })}<td className="focus-daily-total"><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td></tr>)}</tbody>
               <tfoot><tr><th>MTD Total</th>{focusModelMonitor.rows.map((row) => <td key={row.key}><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td>)}<td><strong>{integer.format(focusModelMonitor.total.qty)}</strong><small>฿{integer.format(focusModelMonitor.total.net)}</small></td></tr></tfoot>
+            </table></div>
+          </section>
+
+          <section className={`focus-model-monitor-card focus-model-shop-card ${modelTableCapture === "focus-shops" ? "model-capture-target" : ""}`} aria-labelledby="focus-model-shop-title">
+            <header><div><span>MODEL FOCUS · BY SHOP</span><h3 id="focus-model-shop-title">ยอดขาย Model Focus รายสาขา</h3><p>{data.month} • 1–{selectedDay} {shortMonth} • {focusModelMonitor.shopRows.length} สาขา รวมสาขาที่ยังไม่มียอด</p></div><div className="model-card-actions"><p>เรียงตาม {modelSort === "net" ? "Net Amount" : "QTY"} • แสดง QTY และ Net</p>{captureButton("focus-shops", "focus-model-shop-title")}</div></header>
+            <div className="focus-model-table-wrap"><table className="focus-model-table focus-model-shop-table">
+              <thead><tr><th>Shop</th>{focusModelMonitor.rows.map((row) => <th key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.label}<small>{row.brand}</small></th>)}<th>Total Focus</th></tr></thead>
+              <tbody>{focusModelMonitor.shopRows.map((row) => <tr key={row.code}><th><strong>{row.shop}</strong><small>{row.code}{row.total.qty === 0 && row.total.net === 0 ? " · No Sales" : ""}</small></th>{focusModelMonitor.rows.map((model) => { const value = row.values[model.key]; return <td key={model.key}><strong>{integer.format(value.qty)}</strong><small>฿{integer.format(value.net)}</small></td>; })}<td className="focus-daily-total"><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td></tr>)}</tbody>
+              <tfoot><tr><th>Grand Total</th>{focusModelMonitor.rows.map((row) => <td key={row.key}><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td>)}<td><strong>{integer.format(focusModelMonitor.total.qty)}</strong><small>฿{integer.format(focusModelMonitor.total.net)}</small></td></tr></tfoot>
             </table></div>
           </section>
 
