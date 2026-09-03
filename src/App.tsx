@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dashboardForMonth, dashboardMonths, fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DailySale, type DataRow } from "./google-sheet-data";
-import { focusPeriod, type FocusView } from "./focus-period";
+import { focusPeriod, selectedDayFromDate, type FocusView } from "./focus-period";
 import { clampModelSalesDateRange, modelSaleKey, modelShopInsight, summarizeModelSales } from "./model-sales";
 import { focusStockKey } from "./stock-data";
 import { comparableWeekPeriod, previousWeekId, shortDateRange, weekDataStatus, weekIndexForDate, weekRanges, wowChangeRate } from "./wow-periods";
@@ -137,6 +137,12 @@ export default function Home() {
   const visibleWeekRanges = weekRanges.map((range, index) => ({ range, index })).filter(({ range }) => range.start.slice(0, 7) === monthPrefix || range.end.slice(0, 7) === monthPrefix);
   const formatDate = useCallback((day: number) => `${monthPrefix}-${String(day).padStart(2, "0")}`, [monthPrefix]);
   const thaiDate = useCallback((day: number) => new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${formatDate(day)}T00:00:00+07:00`)), [formatDate]);
+  const selectDashboardDate = (value: string, dailyFocus = false) => {
+    const day = selectedDayFromDate(value, latestDay);
+    if (day == null) return;
+    setSelectedDay(day);
+    if (dailyFocus) setFocusView("daily");
+  };
 
   const refreshData = useCallback(async () => {
     try {
@@ -858,7 +864,7 @@ export default function Home() {
         <div className="filter-group"><label htmlFor="brand-filter">Brand</label><select id="brand-filter" value={selectedBrand} onChange={(event) => chooseBrand(event.target.value)}><option value="ALL">ALL BRANDS</option>{data.brands.map((row) => <option key={row.brand} value={row.brand}>{row.brand}</option>)}</select></div>
         <div className="filter-group shop-filter"><span className="filter-label">สาขา</span><details className="shop-multiselect"><summary><span>{selectedShops.length === 0 ? "ทุกสาขาที่มี Target หรือยอดขาย" : `${selectedShops.length} สาขาที่เลือก`}</span><b aria-hidden="true">⌄</b></summary><div className="shop-menu"><label className="shop-option all-shops"><input type="checkbox" checked={selectedShops.length === 0} onChange={() => setSelectedShops([])} /><span>ทุกสาขาที่มี Target หรือยอดขาย</span></label><div className="shop-option-list">{shopOptions.map(([code, shop]) => <label className="shop-option" key={code}><input type="checkbox" checked={selectedShops.includes(code)} onChange={() => toggleShop(code)} /><span>{shop}</span></label>)}</div></div></details></div>
         <div className="filter-group performance-filter"><span className="filter-label">Performance</span><div className="segmented performance-segmented"><button className={viewMode === "mtd" ? "selected" : ""} onClick={() => setViewMode("mtd")}>MTD</button><button className={viewMode === "achieve" ? "selected" : ""} onClick={() => setViewMode("achieve")}>Achieve TD</button><button className={viewMode === "runrate" ? "selected" : ""} onClick={() => setViewMode("runrate")}>Run Rate</button><button className={viewMode === "day" ? "selected" : ""} onClick={() => setViewMode("day")}>Daily</button></div></div>
-        <div className="filter-group"><label htmlFor="date-filter">วันที่ขาย</label><input id="date-filter" type="date" min={`${monthPrefix}-01`} max={data.latest} value={formatDate(selectedDay)} onChange={(event) => setSelectedDay(Number(event.target.value.slice(-2)))} /></div>
+        <div className="filter-group"><label htmlFor="date-filter">วันที่ขาย</label><input id="date-filter" type="date" min={`${monthPrefix}-01`} max={data.latest} value={formatDate(selectedDay)} onChange={(event) => selectDashboardDate(event.target.value)} /></div>
       </section>
 
       <section className="context-line shell"><span>{metricLabel}</span><b>{selectedBrand === "ALL" ? "ALL BRANDS" : selectedBrand}</b><b>{shopName}</b><b>{modeCopy.title} ณ {thaiDate(selectedDay)}</b></section>
@@ -985,7 +991,7 @@ export default function Home() {
           </div>
 
           <section className={`focus-model-monitor-card focus-model-daily-card ${modelTableCapture === "focus-models" ? "model-capture-target" : ""}`} aria-labelledby="focus-model-monitor-title">
-            <header><div><span>MODEL FOCUS · DAILY MONITOR</span><h3 id="focus-model-monitor-title">ยอดขายรายวัน 7 รุ่น Focus</h3><p>{data.month} • {focusPeriodLabel} • {shopName}</p></div><div className="model-card-actions focus-model-actions"><div className="focus-period-controls"><label htmlFor="focus-date-filter"><span>วันที่ Focus</span><input id="focus-date-filter" type="date" min={`${monthPrefix}-01`} max={data.latest} value={formatDate(selectedDay)} onChange={(event) => { setSelectedDay(Number(event.target.value.slice(-2))); setFocusView("daily"); }} /></label><div className="focus-view-control" role="group" aria-label="เลือกมุมมองยอดขาย 7 รุ่น Focus"><span>มุมมอง</span><div className="segmented"><button className={focusView === "daily" ? "selected" : ""} type="button" onClick={() => setFocusView("daily")}>Daily</button><button className={focusView === "mtd" ? "selected" : ""} type="button" onClick={() => setFocusView("mtd")}>MTD</button></div></div></div>{captureButton("focus-models", "focus-model-monitor-title")}</div></header>
+            <header><div><span>MODEL FOCUS · DAILY MONITOR</span><h3 id="focus-model-monitor-title">ยอดขายรายวัน 7 รุ่น Focus</h3><p>{data.month} • {focusPeriodLabel} • {shopName}</p></div><div className="model-card-actions focus-model-actions"><div className="focus-period-controls"><label htmlFor="focus-date-filter"><span>วันที่ Focus</span><input id="focus-date-filter" type="date" min={`${monthPrefix}-01`} max={data.latest} value={formatDate(selectedDay)} onChange={(event) => selectDashboardDate(event.target.value, true)} /></label><div className="focus-view-control" role="group" aria-label="เลือกมุมมองยอดขาย 7 รุ่น Focus"><span>มุมมอง</span><div className="segmented"><button className={focusView === "daily" ? "selected" : ""} type="button" onClick={() => setFocusView("daily")}>Daily</button><button className={focusView === "mtd" ? "selected" : ""} type="button" onClick={() => setFocusView("mtd")}>MTD</button></div></div></div>{captureButton("focus-models", "focus-model-monitor-title")}</div></header>
             <div className="focus-model-summary">{focusModelMonitor.rows.map((row) => <article key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}><span>{row.label}</span><strong>{integer.format(row.total.qty)} เครื่อง</strong><small>Net ฿{integer.format(row.total.net)} • {row.activeShops} สาขา</small></article>)}</div>
             <div className="focus-model-table-wrap"><table className="focus-model-table focus-model-daily-table">
               <colgroup><col className="focus-daily-date-column" /><col span={8} className="focus-daily-value-column" /></colgroup>
