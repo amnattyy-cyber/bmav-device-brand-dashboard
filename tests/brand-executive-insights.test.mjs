@@ -40,3 +40,12 @@ test("top and risk signals select the correct brand and shop", () => {
   assert.equal(result.topShop.shop, "Top Shop");
   assert.equal(result.riskShop.shop, "Risk Shop");
 });
+
+test("best and risk shop are not the same when alternatives exist", () => {
+  const result = analyzeBrandExecutive(brands, [
+    { code: "S1", shop: "Top Shop", target: 100, actual: 140, achievement: 140, noSalesBrands: 4, totalBrands: 4 },
+    { code: "S2", shop: "Alternative Risk", target: 100, actual: 35, achievement: 35, noSalesBrands: 3, totalBrands: 4 },
+  ]);
+  assert.equal(result.topShop.shop, "Top Shop");
+  assert.equal(result.riskShop.shop, "Alternative Risk");
+});
