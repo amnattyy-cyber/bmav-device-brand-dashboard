@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { analyzeBrandExecutive, type ExecutiveBrandRow, type ExecutiveShopRow } from "./brand-executive-insights";
 import { dashboardForMonth, dashboardMonths, fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DailySale, type DataRow } from "./google-sheet-data";
 import { focusPeriod, selectedDayFromDate, type FocusView } from "./focus-period";
 import { clampModelSalesDateRange, modelSaleKey, modelShopInsight, summarizeModelSales } from "./model-sales";
@@ -11,7 +12,7 @@ type Metric = "net" | "qty";
 type ViewMode = "day" | "mtd" | "achieve" | "runrate";
 type MatrixRanking = "rank" | "achieve" | "runrate";
 type SourceStatus = "loading" | "live" | "fallback";
-type ModelTableCapture = "focus-models" | "focus-shops" | "focus-stock" | "overview" | "shop-wow" | "branch" | "top-models" | "daily-sales" | null;
+type ModelTableCapture = "executive-overview" | "focus-models" | "focus-shops" | "focus-stock" | "overview" | "shop-wow" | "branch" | "top-models" | "daily-sales" | null;
 type WeekSnapshot = { net: number; qty: number };
 type ViewMetrics = {
   monthlyTarget: number;
@@ -51,6 +52,7 @@ const wowRateLabel = (value: number | null) => value == null ? "—" : signed(va
 const wowRateTone = (value: number | null) => value == null ? "neutral" : value >= 0 ? "positive" : "negative";
 const comparisonTone = (value: number | null) => value == null || value === 0 ? "flat" : value > 0 ? "growth" : "decline";
 const signedInteger = (value: number) => `${value > 0 ? "+" : ""}${integer.format(value)}`;
+const percentageOf = (count: number, total: number) => total > 0 ? (count / total) * 100 : 0;
 const salesSnapshot = (sales: DailySale[], start: string, end: string | null): WeekSnapshot => {
   if (!end) return { net: 0, qty: 0 };
   return sales.reduce((total, sale) => sale.date >= start && sale.date <= end
@@ -344,6 +346,58 @@ export default function Home() {
       return [brand, { current, previous, rate: wowChangeRate(current, previous) }] as const;
     }));
   }, [data.brands, data.latest, data.sales, metric, selectedShops, selectedWeek]);
+
+  const executiveOverview = useMemo(() => {
+    const brandNames = [...new Set([
+      ...data.brands.map((row) => row.brand),
+      ...data.shops.map((row) => row.brand ?? ""),
+      ...data.sales.map((row) => row.brand),
+    ].filter(Boolean))];
+    const shopsByCode = new Map<string, string>();
+    data.shops.forEach((row) => shopsByCode.set(String(row.code), row.shop ?? String(row.code)));
+    data.sales.forEach((row) => shopsByCode.set(String(row.code), row.shop || shopsByCode.get(String(row.code)) || String(row.code)));
+    const visibleShops = [...shopsByCode.entries()].filter(([code]) => selectedShops.length === 0 || selectedShops.includes(code));
+
+    const brandRows: ExecutiveBrandRow[] = brandNames.map((brand) => {
+      const rows = data.shops.filter((row) => row.brand === brand && (selectedShops.length === 0 || selectedShops.includes(String(row.code))));
+      const view = getViewMetrics(combineRows(rows));
+      const activeShops = visibleShops.filter(([code]) => {
+        const shopBrandRows = data.shops.filter((row) => String(row.code) === code && row.brand === brand);
+        return getViewMetrics(combineRows(shopBrandRows)).actual > 0;
+      }).length;
+      return {
+        brand,
+        target: view.target,
+        actual: view.actual,
+        achievement: view.monthlyTarget > 0 ? view.achievement : null,
+        wow: brandWow.get(brand)?.rate ?? null,
+        activeShops,
+        totalShops: visibleShops.length,
+        hasTarget: view.monthlyTarget > 0,
+      };
+    }).sort((a, b) => b.actual - a.actual || a.brand.localeCompare(b.brand));
+
+    const shopRows: ExecutiveShopRow[] = visibleShops.map(([code, shop]) => {
+      const rows = data.shops.filter((row) => String(row.code) === code);
+      const view = getViewMetrics(combineRows(rows));
+      const noSalesBrands = brandNames.filter((brand) => {
+        const brandRowsForShop = rows.filter((row) => row.brand === brand);
+        return getViewMetrics(combineRows(brandRowsForShop)).actual <= 0;
+      }).length;
+      return {
+        code,
+        shop,
+        target: view.target,
+        actual: view.actual,
+        achievement: view.monthlyTarget > 0 ? view.achievement : null,
+        noSalesBrands,
+        totalBrands: brandNames.length,
+      };
+    });
+
+    const totals = brandRows.reduce((sum, row) => ({ target: sum.target + row.target, actual: sum.actual + row.actual }), { target: 0, actual: 0 });
+    return { rows: brandRows, shopRows, totals, analysis: analyzeBrandExecutive(brandRows, shopRows) };
+  }, [brandWow, data.brands, data.sales, data.shops, getViewMetrics, selectedShops]);
 
   const allBrandWow = useMemo(() => {
     const range = weekRanges[selectedWeek];
@@ -868,6 +922,54 @@ export default function Home() {
       </section>
 
       <section className="context-line shell"><span>{metricLabel}</span><b>{selectedBrand === "ALL" ? "ALL BRANDS" : selectedBrand}</b><b>{shopName}</b><b>{modeCopy.title} ณ {thaiDate(selectedDay)}</b></section>
+
+      <section className={`section executive-overview-section shell ${modelTableCapture === "executive-overview" ? "model-capture-target" : ""}`} aria-labelledby="executive-overview-title">
+        <header className="executive-overview-heading">
+          <div><span className="section-number">EXECUTIVE</span><h2 id="executive-overview-title">BMAV Brand Executive Overview</h2><p>ภาพรวมทุก Brand • {metricLabel} • {modeCopy.title} ณ {thaiDate(selectedDay)} • {shopName} • Insight สร้างอัตโนมัติตามตัวกรอง</p></div>
+          <button className={`capture-view-button ${modelTableCapture === "executive-overview" ? "active" : ""}`} type="button" aria-pressed={modelTableCapture === "executive-overview"} onClick={() => toggleModelCapture("executive-overview", "executive-overview-title")}><span aria-hidden="true">{modelTableCapture === "executive-overview" ? "×" : "▣"}</span>{modelTableCapture === "executive-overview" ? "ออกจาก Capture" : "Capture Board"}</button>
+        </header>
+        <div className="executive-summary-strip">
+          <article><span>Brand ที่ประเมิน</span><strong>{executiveOverview.analysis.totalBrands}</strong><small>มี Target {executiveOverview.analysis.targetBrands} Brand</small></article>
+          <article className="achieved"><span>Target Achieved</span><strong>{percentageOf(executiveOverview.analysis.achieved.length, executiveOverview.analysis.targetBrands).toFixed(1)}%</strong><small>{executiveOverview.analysis.achieved.length} Brand ≥ 100%</small></article>
+          <article className="near"><span>Near Target</span><strong>{percentageOf(executiveOverview.analysis.nearTarget.length, executiveOverview.analysis.targetBrands).toFixed(1)}%</strong><small>{executiveOverview.analysis.nearTarget.length} Brand ที่ 80–99%</small></article>
+          <article className="risk"><span>Needs Improvement</span><strong>{percentageOf(executiveOverview.analysis.underFifty.length, executiveOverview.analysis.targetBrands).toFixed(1)}%</strong><small>{executiveOverview.analysis.underFifty.length} Brand ต่ำกว่า 50%</small></article>
+        </div>
+        <div className="executive-overview-layout">
+          <div className="executive-brand-table-wrap">
+            <table className="executive-brand-table">
+              <thead><tr><th>Brand</th><th>{modeCopy.target}</th><th>{modeCopy.actual}</th><th>%Ach</th><th>Gap</th><th>WoW {metric === "net" ? "Net" : "Qty"}</th><th>Active Shop</th></tr></thead>
+              <tbody>{executiveOverview.rows.map((row) => <tr key={row.brand}>
+                <th><i style={{ background: brandColors[row.brand] ?? "#64748b" }} /><strong>{row.brand}</strong></th>
+                <td>{row.hasTarget ? tableValue(row.target) : <span className="executive-no-target">No Target</span>}</td>
+                <td><b>{tableValue(row.actual)}</b></td>
+                <td><span className={`executive-achievement ${row.achievement == null ? "flat" : comparisonTone(row.achievement - 100)}`}>{row.achievement == null ? "—" : `${row.achievement.toFixed(1)}%`}</span></td>
+                <td className={row.hasTarget ? comparisonTone(row.actual - row.target) : "flat"}>{row.hasTarget ? signedInteger(row.actual - row.target) : "—"}</td>
+                <td><span className={`all-brand-wow-rate ${comparisonTone(row.wow)}`}>{wowRateLabel(row.wow)}</span></td>
+                <td>{row.activeShops}/{row.totalShops}</td>
+              </tr>)}</tbody>
+              <tfoot><tr><th>BMAV Total</th><td>{tableValue(executiveOverview.totals.target)}</td><td>{tableValue(executiveOverview.totals.actual)}</td><td>{executiveOverview.totals.target > 0 ? `${((executiveOverview.totals.actual / executiveOverview.totals.target) * 100).toFixed(1)}%` : "—"}</td><td className={comparisonTone(executiveOverview.totals.actual - executiveOverview.totals.target)}>{signedInteger(executiveOverview.totals.actual - executiveOverview.totals.target)}</td><td>{wowRateLabel(metric === "net" ? allBrandWow.totals.netRate : allBrandWow.totals.qtyRate)}</td><td>{executiveOverview.shopRows.length} Shop</td></tr></tfoot>
+            </table>
+          </div>
+          <div className="executive-insight-column">
+            <article className="executive-insight-card concentration"><header><span>01</span><h3>การกระจุกตัวของผลงาน</h3></header><ul>
+              <li><b>{percentageOf(executiveOverview.analysis.achieved.length, executiveOverview.analysis.targetBrands).toFixed(1)}%</b> ของ Brand ที่มี Target ({executiveOverview.analysis.achieved.length}/{executiveOverview.analysis.targetBrands}) ทำยอดถึงหรือเกิน 100%</li>
+              <li><b>{executiveOverview.analysis.noSales.length} Brand</b> ไม่มียอดขายในมุมมองปัจจุบัน{executiveOverview.analysis.noSales.length ? `: ${executiveOverview.analysis.noSales.map((row) => row.brand).join(", ")}` : ""}</li>
+              <li><b>{percentageOf(executiveOverview.analysis.underFifty.length, executiveOverview.analysis.targetBrands).toFixed(1)}%</b> ต่ำกว่า 50% ของเป้าหมาย และ <b>{executiveOverview.analysis.nearTarget.length} Brand</b> อยู่ที่ 80–99%</li>
+            </ul></article>
+            <article className="executive-insight-card trends"><header><span>02</span><h3>แนวโน้มที่น่าสนใจ</h3></header><ul>
+              <li>ยอดสูงสุดคือ <b>{executiveOverview.analysis.topActual?.brand ?? "—"}</b> ที่ {executiveOverview.analysis.topActual ? displayValue(executiveOverview.analysis.topActual.actual) : "—"}{executiveOverview.totals.actual > 0 && executiveOverview.analysis.topActual ? ` (${((executiveOverview.analysis.topActual.actual / executiveOverview.totals.actual) * 100).toFixed(1)}% ของพื้นที่)` : ""}</li>
+              <li>อัตราทำถึงเป้าสูงสุด: <b>{executiveOverview.analysis.topAchievement?.brand ?? "—"}</b> {executiveOverview.analysis.topAchievement?.achievement != null ? `${executiveOverview.analysis.topAchievement.achievement.toFixed(1)}%` : "ไม่มี Target"}; เติบโต WoW สูงสุด: <b>{executiveOverview.analysis.topGrowth?.brand ?? "ยังไม่มีฐาน"}</b> {wowRateLabel(executiveOverview.analysis.topGrowth?.wow ?? null)}</li>
+              <li>สาขาแข็งแกร่งที่สุด: <b>{executiveOverview.analysis.topShop?.shop ?? "—"}</b> {executiveOverview.analysis.topShop?.achievement != null ? `${executiveOverview.analysis.topShop.achievement.toFixed(1)}%` : ""}; สาขาที่ต้องจับตา: <b>{executiveOverview.analysis.riskShop?.shop ?? "—"}</b></li>
+            </ul></article>
+            <article className="executive-insight-card actions"><header><span>03</span><h3>ข้อเสนอแนะเชิงปฏิบัติการ</h3></header><ul>
+              <li>เร่งแผนรายวันให้ {executiveOverview.analysis.underFifty.length} Brand ต่ำกว่า 50%{executiveOverview.analysis.underFifty.length ? ` โดยเริ่มจาก ${executiveOverview.analysis.underFifty.slice(0, 3).map((row) => row.brand).join(", ")}` : " และรักษาระดับปัจจุบัน"}</li>
+              <li>ผลักดันกลุ่ม Near Target {executiveOverview.analysis.nearTarget.length} Brand ให้ปิด Gap ภายในสัปดาห์นี้{executiveOverview.analysis.nearTarget.length ? `: ${executiveOverview.analysis.nearTarget.map((row) => row.brand).join(", ")}` : ""}</li>
+              <li>ถอด Playbook จาก <b>{executiveOverview.analysis.topAchievement?.brand ?? executiveOverview.analysis.topActual?.brand ?? "Brand นำ"}</b> และ <b>{executiveOverview.analysis.topShop?.shop ?? "สาขานำ"}</b> ไปใช้ที่ {executiveOverview.analysis.riskShop?.shop ?? "สาขาที่ผลงานต่ำ"}; ติดตามกระดานนี้ทุกสัปดาห์</li>
+            </ul></article>
+          </div>
+        </div>
+        <footer className="executive-board-foot"><span>{allBrandWow.range.id}: {shortDateRange(allBrandWow.period.currentStart, allBrandWow.period.currentEnd)} เทียบ {previousWeekId(allBrandWow.range.id)}: {shortDateRange(allBrandWow.period.baseStart, allBrandWow.period.baseEnd)} • {allBrandWow.period.currentDays} วันเท่ากัน</span><b>ข้อมูล Google Sheet • อัปเดตตามตัวกรองปัจจุบัน</b></footer>
+      </section>
 
       <section className="section wow-section shell" aria-labelledby="wow-title">
         <div className="section-heading wow-heading"><div><span className="section-number">WOW</span><h2 id="wow-title">Performance WoW</h2><p>{wow.range.id}: {shortDateRange(wow.period.currentStart, wow.period.currentEnd)} • เทียบฐาน {shortDateRange(wow.period.baseStart, wow.period.baseEnd)} • {weekDataStatus(wow.period)}</p></div><span className={`wow-status ${activeWowTone}`}>WoW {metric === "net" ? "Net" : "Qty"} {wowRateLabel(activeWowRate)}</span></div>
