@@ -49,6 +49,10 @@ export function analyzeBrandExecutive(brands: ExecutiveBrandRow[], shops: Execut
   const comparableDecline = brands.filter((row) => row.wow != null && (row.wow ?? 0) < 0);
   const shopsWithTarget = shops.filter((row) => row.target > 0 && row.achievement != null);
   const riskShops = shops.filter((row) => row.totalBrands > 0);
+  const topShop = firstBy(shopsWithTarget, (row) => row.achievement ?? 0);
+  const rankedRiskShops = [...riskShops]
+    .filter((row) => row.code !== topShop?.code || riskShops.length === 1)
+    .sort((a, b) => b.noSalesBrands - a.noSalesBrands || (a.achievement ?? Number.POSITIVE_INFINITY) - (b.achievement ?? Number.POSITIVE_INFINITY));
 
   return {
     totalBrands: brands.length,
@@ -61,7 +65,7 @@ export function analyzeBrandExecutive(brands: ExecutiveBrandRow[], shops: Execut
     topAchievement: firstBy(targetRows, (row) => row.achievement ?? 0),
     topGrowth: firstBy(comparableGrowth, (row) => row.wow ?? 0),
     biggestDecline: firstBy(comparableDecline, (row) => row.wow ?? 0, "asc"),
-    topShop: firstBy(shopsWithTarget, (row) => row.achievement ?? 0),
-    riskShop: [...riskShops].sort((a, b) => b.noSalesBrands - a.noSalesBrands || (a.achievement ?? Number.POSITIVE_INFINITY) - (b.achievement ?? Number.POSITIVE_INFINITY))[0] ?? null,
+    topShop,
+    riskShop: rankedRiskShops[0] ?? null,
   };
 }

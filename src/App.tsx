@@ -963,7 +963,7 @@ export default function Home() {
             </ul></article>
             <article className="executive-insight-card actions"><header><span>03</span><h3>ข้อเสนอแนะเชิงปฏิบัติการ</h3></header><ul>
               <li>เร่งแผนรายวันให้ {executiveOverview.analysis.underFifty.length} Brand ต่ำกว่า 50%{executiveOverview.analysis.underFifty.length ? ` โดยเริ่มจาก ${executiveOverview.analysis.underFifty.slice(0, 3).map((row) => row.brand).join(", ")}` : " และรักษาระดับปัจจุบัน"}</li>
-              <li>ผลักดันกลุ่ม Near Target {executiveOverview.analysis.nearTarget.length} Brand ให้ปิด Gap ภายในสัปดาห์นี้{executiveOverview.analysis.nearTarget.length ? `: ${executiveOverview.analysis.nearTarget.map((row) => row.brand).join(", ")}` : ""}</li>
+              <li>{executiveOverview.analysis.nearTarget.length ? <>ผลักดันกลุ่ม Near Target {executiveOverview.analysis.nearTarget.length} Brand ให้ปิด Gap ภายในสัปดาห์นี้: {executiveOverview.analysis.nearTarget.map((row) => row.brand).join(", ")}</> : <>ยังไม่มี Brand ในช่วง 80–99% จึงควรเร่งกลุ่มที่ใกล้ 80% ที่สุดก่อน</>}</li>
               <li>ถอด Playbook จาก <b>{executiveOverview.analysis.topAchievement?.brand ?? executiveOverview.analysis.topActual?.brand ?? "Brand นำ"}</b> และ <b>{executiveOverview.analysis.topShop?.shop ?? "สาขานำ"}</b> ไปใช้ที่ {executiveOverview.analysis.riskShop?.shop ?? "สาขาที่ผลงานต่ำ"}; ติดตามกระดานนี้ทุกสัปดาห์</li>
             </ul></article>
           </div>
