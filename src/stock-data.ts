@@ -15,7 +15,8 @@ export type FocusStockKey =
   | "vivo-y05"
   | "xiaomi-redmi-a7-pro"
   | "honor-x5c"
-  | "infinix-smart20";
+  | "infinix-smart20"
+  | "realme-note80";
 
 function findHeader(headers: string[], aliases: string[]) {
   const normalized = headers.map((header) => header.trim().toUpperCase());
@@ -36,6 +37,7 @@ export function focusStockKey(model: string): FocusStockKey | null {
   if (normalized.includes("REDMI A7 PRO")) return "xiaomi-redmi-a7-pro";
   if (normalized.includes("HONOR X5C")) return "honor-x5c";
   if (/INFINIX SMART\s*20/.test(normalized)) return "infinix-smart20";
+  if (/REALME NOTE\s*80/.test(normalized)) return "realme-note80";
   return null;
 }
 
