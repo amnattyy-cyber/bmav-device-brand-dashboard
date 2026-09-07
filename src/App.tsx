@@ -12,7 +12,7 @@ type Metric = "net" | "qty";
 type ViewMode = "day" | "mtd" | "achieve" | "runrate";
 type MatrixRanking = "rank" | "achieve" | "runrate";
 type SourceStatus = "loading" | "live" | "fallback";
-type ModelTableCapture = "executive-overview" | "focus-models" | "focus-shops" | "focus-stock" | "overview" | "shop-wow" | "branch" | "top-models" | "daily-sales" | null;
+type ModelTableCapture = "executive-overview" | "focus-models" | "focus-trend" | "focus-shops" | "focus-stock" | "overview" | "shop-wow" | "branch" | "top-models" | "daily-sales" | null;
 type WeekSnapshot = { net: number; qty: number };
 type ViewMetrics = {
   monthlyTarget: number;
@@ -71,6 +71,15 @@ const isoDateRange = (start: string, end: string | null) => {
   return dates;
 };
 const compactDate = (date: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(`${date}T00:00:00Z`));
+const smoothLinePath = (points: Array<{ x: number; y: number }>) => {
+  if (!points.length) return "";
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  return points.slice(1).reduce((path, point, index) => {
+    const previous = points[index];
+    const middleX = (previous.x + point.x) / 2;
+    return `${path} C ${middleX} ${previous.y}, ${middleX} ${point.y}, ${point.x} ${point.y}`;
+  }, `M ${points[0].x} ${points[0].y}`);
+};
 
 const emptyRow = (): DataRow => ({ targetQty: 0, targetNet: 0, dailyQty: Array(31).fill(0), dailyNet: Array(31).fill(0), previousDailyQty: Array(31).fill(0), previousDailyNet: Array(31).fill(0) });
 const combineRows = (rows: DataRow[]): DataRow => rows.reduce((total, row) => ({
@@ -724,6 +733,14 @@ export default function Home() {
       }));
       return { date, values, total: Object.values(values).reduce((sum, value) => ({ qty: sum.qty + value.qty, net: sum.net + value.net }), { qty: 0, net: 0 }) };
     });
+    const trendDaily = Array.from({ length: selectedDay }, (_, index) => {
+      const date = formatDate(index + 1);
+      const values = Object.fromEntries(focusModels.map((definition) => {
+        const sales = mtdMapped.filter((item) => item.definition.key === definition.key && item.sale.date === date).map((item) => item.sale);
+        return [definition.key, salesSnapshot(sales, date, date)];
+      }));
+      return { date, values };
+    });
     const total = rows.reduce((sum, row) => ({ qty: sum.qty + row.total.qty, net: sum.net + row.total.net }), { qty: 0, net: 0 });
     const shopRows = modelShopOptions
       .filter(([code]) => selectedShops.length === 0 || selectedShops.includes(code))
@@ -736,8 +753,34 @@ export default function Home() {
         return { code, shop, values, total: shopTotal };
       })
       .sort((a, b) => b.total[modelSort] - a.total[modelSort] || a.shop.localeCompare(b.shop));
-    return { rows, daily, shopRows, total, period };
+    return { rows, daily, trendDaily, shopRows, total, period };
   }, [data.modelSales, focusView, formatDate, modelShopOptions, modelSort, monthPrefix, selectedDay, selectedShops]);
+  const focusTrendChart = useMemo(() => {
+    const width = 1000;
+    const height = 300;
+    const left = 54;
+    const right = 18;
+    const top = 18;
+    const bottom = 38;
+    const plotWidth = width - left - right;
+    const plotHeight = height - top - bottom;
+    const values = focusModelMonitor.trendDaily.flatMap((day) => focusModels.map((model) => day.values[model.key]?.qty ?? 0));
+    const rawMax = Math.max(...values, 1);
+    const step = Math.max(1, Math.ceil(rawMax / 4));
+    const max = step * 4;
+    const x = (index: number) => focusModelMonitor.trendDaily.length === 1
+      ? left + plotWidth / 2
+      : left + (index / Math.max(focusModelMonitor.trendDaily.length - 1, 1)) * plotWidth;
+    const y = (value: number) => top + plotHeight - (value / max) * plotHeight;
+    const labelEvery = Math.max(1, Math.ceil(focusModelMonitor.trendDaily.length / 10));
+    const series = focusModels.map((model) => {
+      const points = focusModelMonitor.trendDaily.map((day, index) => ({ x: x(index), y: y(day.values[model.key]?.qty ?? 0), value: day.values[model.key]?.qty ?? 0 }));
+      return { ...model, color: brandColors[model.brand] ?? "#64748b", points, path: smoothLinePath(points) };
+    });
+    const ticks = Array.from({ length: 5 }, (_, index) => ({ value: step * index, y: y(step * index) })).reverse();
+    const labels = focusModelMonitor.trendDaily.map((day, index) => ({ date: day.date, x: x(index), show: index % labelEvery === 0 || index === focusModelMonitor.trendDaily.length - 1 }));
+    return { width, height, left, right, top, bottom, plotWidth, plotHeight, max, series, ticks, labels };
+  }, [focusModelMonitor.trendDaily]);
   const focusStockMonitor = useMemo(() => {
     const visibleShops = modelShopOptions.filter(([code]) => selectedShops.length === 0 || selectedShops.includes(code));
     const visibleCodes = new Set(visibleShops.map(([code]) => code));
@@ -1103,12 +1146,28 @@ export default function Home() {
             </table></div>
           </section>
 
+          <section className={`focus-model-monitor-card focus-model-trend-card ${modelTableCapture === "focus-trend" ? "model-capture-target" : ""}`} aria-labelledby="focus-model-trend-title">
+            <header><div><span>MODEL FOCUS · DAILY TREND</span><h3 id="focus-model-trend-title">Trend By Model Focus</h3><p>ยอดขาย QTY รายวัน 7 รุ่น • 1–{selectedDay} {shortMonth} • {shopName}</p></div><div className="model-card-actions"><p>สีเส้นแยกตาม Brand • จุดแสดงยอดขายรายวัน</p>{captureButton("focus-trend", "focus-model-trend-title")}</div></header>
+            <div className="focus-trend-chart-wrap">
+              <svg className="focus-trend-chart" viewBox={`0 0 ${focusTrendChart.width} ${focusTrendChart.height}`} role="img" aria-label={`กราฟยอดขายรายวัน 7 รุ่น Focus ถึงวันที่ ${selectedDay} ${shortMonth}`}>
+                {focusTrendChart.ticks.map((tick) => <g key={tick.value}><line x1={focusTrendChart.left} x2={focusTrendChart.width - focusTrendChart.right} y1={tick.y} y2={tick.y} className="focus-trend-grid" /><text x={focusTrendChart.left - 12} y={tick.y + 4} className="focus-trend-y-label">{tick.value}</text></g>)}
+                <text x="15" y={focusTrendChart.top + focusTrendChart.plotHeight / 2} className="focus-trend-axis-title" transform={`rotate(-90 15 ${focusTrendChart.top + focusTrendChart.plotHeight / 2})`}>Units sold</text>
+                {focusTrendChart.series.map((series) => <g key={series.key}>
+                  <path d={series.path} fill="none" stroke={series.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                  {series.points.map((point, index) => <circle key={`${series.key}-${index}`} cx={point.x} cy={point.y} r="4" fill={series.color}><title>{series.label} • {compactDate(focusTrendChart.labels[index].date)} • {integer.format(point.value)} เครื่อง</title></circle>)}
+                </g>)}
+                {focusTrendChart.labels.filter((label) => label.show).map((label) => <text key={label.date} x={label.x} y={focusTrendChart.height - 12} className="focus-trend-x-label">{label.date.slice(5)}</text>)}
+              </svg>
+            </div>
+            <div className="focus-trend-legend">{focusTrendChart.series.map((series) => <span key={series.key}><i style={{ background: series.color }} />{series.label}</span>)}</div>
+          </section>
+
           <section className={`focus-model-monitor-card focus-model-shop-card ${modelTableCapture === "focus-shops" ? "model-capture-target" : ""}`} aria-labelledby="focus-model-shop-title">
             <header><div><span>MODEL FOCUS · BY SHOP</span><h3 id="focus-model-shop-title">ยอดขาย Model Focus รายสาขา</h3><p>{data.month} • {focusPeriodLabel} • {focusModelMonitor.shopRows.length} สาขา รวมสาขาที่ยังไม่มียอด</p></div><div className="model-card-actions"><p>เรียงตาม {modelSort === "net" ? "Net Amount" : "QTY"} • แสดง QTY และ Net • ใช้มุมมอง Focus ด้านบน</p>{captureButton("focus-shops", "focus-model-shop-title")}</div></header>
             <div className="focus-model-table-wrap"><table className="focus-model-table focus-model-shop-table">
               <colgroup><col className="focus-shop-name-column" /><col span={8} className="focus-shop-value-column" /></colgroup>
               <thead><tr><th>Shop</th>{focusModelMonitor.rows.map((row) => <th key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.label}<small>{row.brand}</small></th>)}<th>Total Focus</th></tr></thead>
-              <tbody>{focusModelMonitor.shopRows.map((row) => <tr key={row.code}><th><strong>{row.shop}</strong><small>{row.code}{row.total.qty === 0 && row.total.net === 0 ? " · No Sales" : ""}</small></th>{focusModelMonitor.rows.map((model) => { const value = row.values[model.key]; return <td key={model.key}><strong>{integer.format(value.qty)}</strong><small>฿{integer.format(value.net)}</small></td>; })}<td className="focus-daily-total"><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td></tr>)}</tbody>
+              <tbody>{focusModelMonitor.shopRows.map((row) => <tr className={row.total.qty === 0 ? "focus-no-sales-row" : ""} key={row.code}><th><strong>{row.shop}</strong><small>{row.code}{row.total.qty === 0 ? <b className="focus-no-sales-badge">No Sales</b> : ""}</small></th>{focusModelMonitor.rows.map((model) => { const value = row.values[model.key]; return <td key={model.key}><strong>{integer.format(value.qty)}</strong><small>฿{integer.format(value.net)}</small></td>; })}<td className="focus-daily-total"><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td></tr>)}</tbody>
               <tfoot><tr><th>Grand Total</th>{focusModelMonitor.rows.map((row) => <td key={row.key}><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td>)}<td><strong>{integer.format(focusModelMonitor.total.qty)}</strong><small>฿{integer.format(focusModelMonitor.total.net)}</small></td></tr></tfoot>
             </table></div>
           </section>
