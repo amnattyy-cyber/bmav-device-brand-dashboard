@@ -70,7 +70,7 @@ export const fallbackData: DashboardData = { ...fallbackBase, sales: fallbackSal
 
 const GOOGLE_SHEET_ID = "1qsVJk2DbXW8EInVK7gFIOtCB9-5GdVp5vJhU4hPK29k";
 const STOCK_SHEET_ID = "1appOkfuCPuReEM63lS5RT3gWt2dD4HB-FGl2_h5Vhrw";
-const STOCK_SHEET_GID = "1916106773";
+const STOCK_SHEET_GID = "1351833211";
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const SHEET_GIDS: Record<string, string> = {
   Daily_Sales: "892853742",
