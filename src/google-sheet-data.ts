@@ -70,7 +70,7 @@ export const fallbackData: DashboardData = { ...fallbackBase, sales: fallbackSal
 
 const GOOGLE_SHEET_ID = "1qsVJk2DbXW8EInVK7gFIOtCB9-5GdVp5vJhU4hPK29k";
 const STOCK_SHEET_ID = "1appOkfuCPuReEM63lS5RT3gWt2dD4HB-FGl2_h5Vhrw";
-const STOCK_SHEET_GID = "1351833211";
+const STOCK_SHEET_NAME = "Data Stock";
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const SHEET_GIDS: Record<string, string> = {
   Daily_Sales: "892853742",
@@ -195,7 +195,7 @@ async function fetchStockSheet(): Promise<string[][]> {
   const callbackName = `bmavStock_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const tableQuery = "select A,C,D,G,H,I,J,M,P where J = 'BMA V - Central' and G > 0 and (M contains 'GALAXY A06 5G' or M contains 'OPPO A6C' or M contains 'VIVO Y05' or M contains 'REDMI A7 PRO' or M contains 'HONOR X5C' or M contains 'INFINIX SMART 20' or (M contains 'REALME NOTE 80' and D starts with 'H/S'))";
   const query = new URLSearchParams({
-    gid: STOCK_SHEET_GID,
+    sheet: STOCK_SHEET_NAME,
     tq: tableQuery,
     tqx: `out:json;responseHandler:${callbackName}`,
     _: String(Date.now()),
