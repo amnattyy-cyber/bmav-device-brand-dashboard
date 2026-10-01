@@ -1,4 +1,5 @@
 import fallbackJson from "./dashboard-data.json";
+import octoberTargets from "./october-targets.json";
 import { parseCsv, parseModelSalesTable, type ModelSale } from "./model-sales";
 import { parseStockTable, type StockRow } from "./stock-data";
 
@@ -36,6 +37,9 @@ export type DashboardData = {
   sales: DailySale[];
   modelSales: ModelSale[];
   stock: StockRow[];
+  deviceTargets?: Array<{ code: string; shop: string; targetQty: number; targetNet: number }>;
+  targetSource?: string;
+  hasMonthSales?: boolean;
   comparison?: unknown;
 };
 
@@ -240,7 +244,7 @@ function previousMonthPrefix(monthPrefix: string) {
 }
 
 export function dashboardMonths(source: DashboardData) {
-  return [...new Set([...source.sales, ...source.modelSales].map((row) => row.date.slice(0, 7)).filter(Boolean))]
+  return [...new Set([octoberTargets.month, ...[...source.sales, ...source.modelSales].map((row) => row.date.slice(0, 7)).filter(Boolean)])]
     .sort((a, b) => b.localeCompare(a));
 }
 
@@ -254,7 +258,9 @@ export function dashboardForMonth(source: DashboardData, monthPrefix: string): D
   const latest = availableDates.at(-1) ?? `${monthPrefix}-01`;
   const sourceMonth = source.latest.slice(0, 7);
   const fallbackMonth = fallbackData.latest.slice(0, 7);
-  const targetSource = monthPrefix === sourceMonth
+  const targetSource = monthPrefix === octoberTargets.month
+    ? octoberTargets.brands
+    : monthPrefix === sourceMonth
     ? source.shops
     : monthPrefix === fallbackMonth
       ? fallbackData.shops
@@ -302,6 +308,9 @@ export function dashboardForMonth(source: DashboardData, monthPrefix: string): D
     ...source,
     month: monthName,
     latest,
+    deviceTargets: monthPrefix === octoberTargets.month ? octoberTargets.device : undefined,
+    targetSource: monthPrefix === octoberTargets.month ? octoberTargets.source : undefined,
+    hasMonthSales: availableDates.length > 0,
     totals: combineRows(shops, days),
     brands,
     shops,

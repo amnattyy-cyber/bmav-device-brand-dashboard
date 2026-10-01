@@ -41,6 +41,7 @@ const focusModels = [
 
 const number = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 1 });
 const integer = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 });
+const targetNumber = new Intl.NumberFormat("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const compactChart = (value: number) => value >= 1_000_000
   ? `${(value / 1_000_000).toFixed(2)}M`
   : value >= 1_000
@@ -182,7 +183,7 @@ export default function Home() {
     const priorLatestDate = previousLatestDate.current;
     const priorLatestDay = Number(priorLatestDate.slice(-2));
     setSelectedDay((current) => current === priorLatestDay ? latestDay : Math.min(current, latestDay));
-    setSelectedWeek((current) => current === weekIndexForDate(priorLatestDate) ? weekIndexForDate(data.latest) : current);
+    setSelectedWeek((current) => priorLatestDate.slice(0, 7) !== data.latest.slice(0, 7) || current === weekIndexForDate(priorLatestDate) ? weekIndexForDate(data.latest) : current);
     previousLatestDate.current = data.latest;
   }, [data.latest, latestDay]);
 
@@ -220,10 +221,17 @@ export default function Home() {
     setSelectedShops((current) => current.includes(code) ? current.filter((item) => item !== code) : [...current, code]);
   };
 
+  const withDeviceTarget = useCallback((row: DataRow, codes: string[]): DataRow => {
+    if (!data.deviceTargets) return row;
+    const targets = data.deviceTargets.filter((target) => codes.includes(target.code));
+    return { ...row, targetQty: targets.reduce((sum, target) => sum + target.targetQty, 0), targetNet: targets.reduce((sum, target) => sum + target.targetNet, 0) };
+  }, [data.deviceTargets]);
+
   const scopeRow = useMemo<DataRow>(() => {
     const rows = data.shops.filter((row) => (selectedBrand === "ALL" || row.brand === selectedBrand) && (selectedShops.length === 0 || selectedShops.includes(row.code)));
-    return combineRows(rows);
-  }, [data.shops, selectedBrand, selectedShops]);
+    const combined = combineRows(rows);
+    return selectedBrand === "ALL" ? withDeviceTarget(combined, [...new Set(rows.map((row) => row.code))]) : combined;
+  }, [data.shops, selectedBrand, selectedShops, withDeviceTarget]);
 
   const dailyValues = metric === "net" ? scopeRow.dailyNet : scopeRow.dailyQty;
   const getViewMetrics = useCallback((row: DataRow): ViewMetrics => {
@@ -277,7 +285,7 @@ export default function Home() {
     const rows: DataRow[] = selectedBrand === "ALL"
       ? [...new Set(data.shops.map((row) => row.code))].map((code) => {
           const items = data.shops.filter((row) => row.code === code);
-          return { ...combineRows(items), code, shop: items[0]?.shop ?? code };
+          return { ...withDeviceTarget(combineRows(items), [code]), code, shop: items[0]?.shop ?? code };
         })
       : data.shops.filter((row) => row.brand === selectedBrand);
     return rows
@@ -288,7 +296,7 @@ export default function Home() {
       })
       .filter((row) => row.hasTarget || row.hasSales)
       .sort((a, b) => viewMode === "mtd" || viewMode === "day" ? b.viewActual - a.viewActual : b.viewAchievement - a.viewAchievement);
-  }, [data.shops, getViewMetrics, selectedBrand, selectedShops, viewMode]);
+  }, [data.shops, getViewMetrics, selectedBrand, selectedShops, viewMode, withDeviceTarget]);
 
   const trend = useMemo(() => Array.from({ length: selectedDay }, (_, index) => ({
     day: index + 1,
@@ -838,8 +846,9 @@ export default function Home() {
     let topBrands = brandSales.slice(0, 12).map((item) => item.brand);
     if (selectedBrand !== "ALL" && !topBrands.includes(selectedBrand)) topBrands = [...topBrands.slice(0, 11), selectedBrand];
 
-    const cellFor = (rows: DataRow[]) => {
-      const row = combineRows(rows);
+    const cellFor = (rows: DataRow[], device = false) => {
+      const combined = combineRows(rows);
+      const row = device ? withDeviceTarget(combined, [...new Set(rows.map((item) => item.code!))]) : combined;
       const values = metric === "net" ? row.dailyNet : row.dailyQty;
       const monthlyTarget = metric === "net" ? row.targetNet : row.targetQty;
       const dailyActual = values[selectedDay - 1] || 0;
@@ -860,14 +869,14 @@ export default function Home() {
       return {
         code,
         shop: rows[0]?.shop ?? code,
-        all: cellFor(rows),
+        all: cellFor(rows, true),
         brands: Object.fromEntries(topBrands.map((brand) => [brand, cellFor(rows.filter((row) => row.brand === brand))])),
       };
     }).filter((row) => row.all.monthlyTarget > 0 || row.all.mtdActual > 0);
     const allShop = {
       code: "ALL_SHOP",
       shop: "ALL Shop",
-      all: cellFor(scopedRows),
+      all: cellFor(scopedRows, true),
       brands: Object.fromEntries(topBrands.map((brand) => [brand, cellFor(scopedRows.filter((row) => row.brand === brand))])),
     };
     const columns = ["ALL", ...topBrands];
@@ -887,7 +896,7 @@ export default function Home() {
       return bCell.rankingValue - aCell.rankingValue || a.shop.localeCompare(b.shop);
     });
     return { topBrands, shopRows: sortedRows, allShop, ranks, activeSort };
-  }, [data.shops, daysInMonth, matrixRanking, matrixSortBrand, metric, selectedBrand, selectedDay, selectedShops, viewMode]);
+  }, [data.shops, daysInMonth, matrixRanking, matrixSortBrand, metric, selectedBrand, selectedDay, selectedShops, viewMode, withDeviceTarget]);
 
   const matrixRankClass = (rank: number | undefined, total: number) => {
     if (!rank) return "matrix-rank-none";
@@ -949,9 +958,9 @@ export default function Home() {
         <div className="hero-visual" aria-label={`Achievement ${achievement.toFixed(1)}%`}>
           <div className="orbit orbit-one" /><div className="orbit orbit-two" />
           <div className="score-ring" style={{ "--score": Math.min(achievement, 100), "--accent": selectedColor } as React.CSSProperties}>
-            <div><strong>{achievement.toFixed(1)}%</strong><span>{scoreRingLabel}</span></div>
+            <div><strong>{data.hasMonthSales === false ? "—" : `${achievement.toFixed(1)}%`}</strong><span>{data.hasMonthSales === false ? "รอยอดขาย" : scoreRingLabel}</span></div>
           </div>
-          <div className="as-of">ข้อมูล ณ {thaiDate(selectedDay)}</div>
+          <div className="as-of">{data.hasMonthSales === false ? "รอยอดขายเดือนนี้" : `ข้อมูล ณ ${thaiDate(selectedDay)}`}</div>
         </div>
       </section>
 
@@ -964,8 +973,31 @@ export default function Home() {
         <div className="filter-group"><label htmlFor="date-filter">วันที่ขาย</label><input id="date-filter" type="date" min={`${monthPrefix}-01`} max={data.latest} value={formatDate(selectedDay)} onChange={(event) => selectDashboardDate(event.target.value)} /></div>
       </section>
 
-      <section className="context-line shell"><span>{metricLabel}</span><b>{selectedBrand === "ALL" ? "ALL BRANDS" : selectedBrand}</b><b>{shopName}</b><b>{modeCopy.title} ณ {thaiDate(selectedDay)}</b></section>
+      <section className="context-line shell"><span>{metricLabel}</span><b>{selectedBrand === "ALL" ? "ALL BRANDS" : selectedBrand}</b><b>{shopName}</b><b>{data.hasMonthSales === false ? `เป้าเต็มเดือน ${data.month}` : `${modeCopy.title} ณ ${thaiDate(selectedDay)}`}</b></section>
 
+      {data.targetSource && <section className="target-month-summary shell" aria-label="เป้าประจำเดือน">
+        <div><strong>{selectedBrand === "ALL" ? "Target Device" : `Target Device by Brand · ${selectedBrand}`} · {data.month}</strong><span>{shopName} · เป้าเต็มเดือน</span></div>
+        <b>Net ฿{targetNumber.format(scopeRow.targetNet)}</b>
+        <b>QTY {number.format(scopeRow.targetQty)} เครื่อง</b>
+        {data.hasMonthSales === false && <p>ยังไม่มีข้อมูลยอดขายเดือนนี้ แสดงเป้าสำหรับวางแผน โดยยังไม่ควรใช้ยอดศูนย์ประเมินผลงาน</p>}
+      </section>}
+
+      {data.hasMonthSales === false && <section className="section shell target-planning" aria-label="ตารางเป้าเต็มเดือน">
+        <h2>Target Device · {data.month}</h2>
+        <p>{selectedBrand === "ALL" ? "ทุก Brand" : selectedBrand} · {shopName} · ใช้เป้าเต็มเดือนระหว่างรอข้อมูลขาย</p>
+        <div className="shop-table-wrap"><table><thead><tr><th>สาขา</th><th>Target QTY</th><th>Target Net Amount (฿)</th></tr></thead><tbody>
+          {shopViews.map((row) => <tr key={row.code}><td className="shop-name">{row.shop}</td><td>{targetNumber.format(row.targetQty)}</td><td>{targetNumber.format(row.targetNet)}</td></tr>)}
+        </tbody><tfoot><tr><th>รวม</th><td>{targetNumber.format(scopeRow.targetQty)}</td><td>{targetNumber.format(scopeRow.targetNet)}</td></tr></tfoot></table></div>
+        <h2>Target Device by Brand · {data.month}</h2>
+        <div className="shop-table-wrap"><table><thead><tr><th>Brand</th><th>Target QTY</th><th>Target Net Amount (฿)</th></tr></thead><tbody>
+          {data.brands.filter((row) => selectedBrand === "ALL" || row.brand === selectedBrand).map(({brand}) => {
+            const row = combineRows(data.shops.filter((item) => item.brand === brand && (selectedShops.length === 0 || selectedShops.includes(item.code))));
+            return <tr key={brand}><th style={{color:brandColors[brand]}}>{brand}</th><td>{targetNumber.format(row.targetQty)}</td><td>{targetNumber.format(row.targetNet)}</td></tr>;
+          })}
+        </tbody><tfoot><tr><th>รวม</th><td>{targetNumber.format(scopeRow.targetQty)}</td><td>{targetNumber.format(scopeRow.targetNet)}</td></tr></tfoot></table></div>
+      </section>}
+
+      {data.hasMonthSales !== false && <>
       <section className={`section executive-overview-section shell ${modelTableCapture === "executive-overview" ? "model-capture-target" : ""}`} aria-labelledby="executive-overview-title">
         <header className="executive-overview-heading">
           <div><span className="section-number">EXECUTIVE</span><h2 id="executive-overview-title">BMAV Brand Executive Overview</h2><p>ภาพรวมทุก Brand • {metricLabel} • {modeCopy.title} ณ {thaiDate(selectedDay)} • {shopName} • Insight สร้างอัตโนมัติตามตัวกรอง</p></div>
@@ -1306,7 +1338,8 @@ export default function Home() {
         </tbody></table></div>
       </section>
 
-      <footer className="shell"><div><strong>BMAV</strong><span>Device by Brand Dashboard</span></div><p><span className={`source-badge ${sourceStatus}`}>{sourceStatus === "live" ? "LIVE · Google Sheet" : sourceStatus === "loading" ? "กำลังอัปเดต" : "ข้อมูลสำรอง"}</span> Last updated {thaiDate(latestDay)}{lastSync ? ` · Sync ${lastSync.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}` : ""}</p></footer>
+      </>}
+      <footer className="shell"><div><strong>BMAV</strong><span>Device by Brand Dashboard</span></div><p><span className={`source-badge ${sourceStatus}`}>{sourceStatus === "live" ? "LIVE · Google Sheet" : sourceStatus === "loading" ? "กำลังอัปเดต" : "ข้อมูลสำรอง"}</span> {data.hasMonthSales === false ? `ยังไม่มีข้อมูลขาย ${data.month}` : `Last updated ${thaiDate(latestDay)}`}{lastSync ? ` · Sync ${lastSync.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}` : ""}</p></footer>
     </main>
   );
 }

@@ -1,0 +1,956 @@
+{
+  "month": "2026-10",
+  "source": "TG Device By Brand Oct B5 GPT.xlsx",
+  "device": [
+    {
+      "code": "80100478",
+      "shop": "True Shop Terminal 21",
+      "targetQty": 120.89563332817413,
+      "targetNet": 3593644.8600000003
+    },
+    {
+      "code": "80100622",
+      "shop": "True Shop Central Rama 9 4Fl.",
+      "targetQty": 793.5304666045589,
+      "targetNet": 29130233.980000004
+    },
+    {
+      "code": "80100623",
+      "shop": "True Shop Central Rama 9",
+      "targetQty": 348.0010326855558,
+      "targetNet": 12283696.190000005
+    },
+    {
+      "code": "80100836",
+      "shop": "True Shop Central World 4Fl.",
+      "targetQty": 926.4566300362873,
+      "targetNet": 33589893.11999998
+    },
+    {
+      "code": "80101068",
+      "shop": "True Shop Central Rama 3",
+      "targetQty": 540.9013438486587,
+      "targetNet": 16990847.89999999
+    },
+    {
+      "code": "80101186",
+      "shop": "True Shop Central Festival East Ville",
+      "targetQty": 590.397788945896,
+      "targetNet": 19190351.98
+    },
+    {
+      "code": "80101221",
+      "shop": "True Shop Emquartier",
+      "targetQty": 303.760394778002,
+      "targetNet": 11396224.49
+    },
+    {
+      "code": "80101633",
+      "shop": "True Shop Makro Sri Ayutthaya",
+      "targetQty": 24.976097809675622,
+      "targetNet": 407570.74999999994
+    },
+    {
+      "code": "80100715",
+      "shop": "True Shop Fortune Town 1Fl.",
+      "targetQty": 42.039954355908186,
+      "targetNet": 993637.1599999999
+    },
+    {
+      "code": "80101269",
+      "shop": "True Shop Mahboon Krong 4Fl.",
+      "targetQty": 167.451097381907,
+      "targetNet": 3853554.81
+    },
+    {
+      "code": "80101349",
+      "shop": "True Shop Silom Complex",
+      "targetQty": 176.36827700348866,
+      "targetNet": 4017532.81
+    },
+    {
+      "code": "80101363",
+      "shop": "True Shop at Chamchuri Square 1",
+      "targetQty": 95.95573610123431,
+      "targetNet": 2201165.4599999995
+    },
+    {
+      "code": "80100729",
+      "shop": "True Shop Station Lotus's Rama 4",
+      "targetQty": 25.941867160185566,
+      "targetNet": 486953.64
+    },
+    {
+      "code": "80101201",
+      "shop": "True Kiosk The Eight Thonglor",
+      "targetQty": 0,
+      "targetNet": 0
+    },
+    {
+      "code": "80101347",
+      "shop": "True Shop U Chu Liang Building",
+      "targetQty": 0,
+      "targetNet": 0
+    },
+    {
+      "code": "80101630",
+      "shop": "Kiosk Lotus's Ramindra",
+      "targetQty": 36.55224418280477,
+      "targetNet": 463050.76999999984
+    },
+    {
+      "code": "80101667",
+      "shop": "True Shop Supreme Complex (D)",
+      "targetQty": 44.443154833996296,
+      "targetNet": 616730.8399999997
+    },
+    {
+      "code": "80101694",
+      "shop": "True Shop Central Rama 9 (D)",
+      "targetQty": 0,
+      "targetNet": 0
+    }
+  ],
+  "brands": [
+    {
+      "code": "80100478",
+      "shop": "True Shop Terminal 21",
+      "brand": "HONOR",
+      "targetQty": 0.45790257954607355,
+      "targetNet": 1268.43
+    },
+    {
+      "code": "80100478",
+      "shop": "True Shop Terminal 21",
+      "brand": "IPAD",
+      "targetQty": 2.0911559790892498,
+      "targetNet": 39905.18
+    },
+    {
+      "code": "80100478",
+      "shop": "True Shop Terminal 21",
+      "brand": "IPHONE",
+      "targetQty": 64.77747489789854,
+      "targetNet": 3222968.59
+    },
+    {
+      "code": "80100478",
+      "shop": "True Shop Terminal 21",
+      "brand": "OPPO",
+      "targetQty": 8.565053759043295,
+      "targetNet": 51613.49
+    },
+    {
+      "code": "80100478",
+      "shop": "True Shop Terminal 21",
+      "brand": "SAMSUNG",
+      "targetQty": 38.8265324141997,
+      "targetNet": 241382.96000000002
+    },
+    {
+      "code": "80100478",
+      "shop": "True Shop Terminal 21",
+      "brand": "VIVO",
+      "targetQty": 3.008189535034272,
+      "targetNet": 14368.039999999997
+    },
+    {
+      "code": "80100478",
+      "shop": "True Shop Terminal 21",
+      "brand": "XIAOMI",
+      "targetQty": 3.1693241633629974,
+      "targetNet": 22138.17
+    },
+    {
+      "code": "80100622",
+      "shop": "True Shop Central Rama 9 4Fl.",
+      "brand": "HONOR",
+      "targetQty": 19.210684052836207,
+      "targetNet": 196387.92999999993
+    },
+    {
+      "code": "80100622",
+      "shop": "True Shop Central Rama 9 4Fl.",
+      "brand": "HUAWEI",
+      "targetQty": 10.027860381270452,
+      "targetNet": 180649.18
+    },
+    {
+      "code": "80100622",
+      "shop": "True Shop Central Rama 9 4Fl.",
+      "brand": "INFINIX",
+      "targetQty": 0.6050544774093126,
+      "targetNet": 6002.59
+    },
+    {
+      "code": "80100622",
+      "shop": "True Shop Central Rama 9 4Fl.",
+      "brand": "IPAD",
+      "targetQty": 23.32807655741876,
+      "targetNet": 565802.49
+    },
+    {
+      "code": "80100622",
+      "shop": "True Shop Central Rama 9 4Fl.",
+      "brand": "IPHONE",
+      "targetQty": 503.6966277106564,
+      "targetNet": 24452271.24
+    },
+    {
+      "code": "80100622",
+      "shop": "True Shop Central Rama 9 4Fl.",
+      "brand": "OPPO",
+      "targetQty": 39.76321744971512,
+      "targetNet": 601914.04
+    },
+    {
+      "code": "80100622",
+      "shop": "True Shop Central Rama 9 4Fl.",
+      "brand": "REALME",
+      "targetQty": 4.055583706490408,
+      "targetNet": 30163.16
+    },
+    {
+      "code": "80100622",
+      "shop": "True Shop Central Rama 9 4Fl.",
+      "brand": "SAMSUNG",
+      "targetQty": 132.8002023847259,
+      "targetNet": 2482298.2699999986
+    },
+    {
+      "code": "80100622",
+      "shop": "True Shop Central Rama 9 4Fl.",
+      "brand": "VIVO",
+      "targetQty": 22.962094280496512,
+      "targetNet": 286246.3599999999
+    },
+    {
+      "code": "80100622",
+      "shop": "True Shop Central Rama 9 4Fl.",
+      "brand": "XIAOMI",
+      "targetQty": 37.081065603539734,
+      "targetNet": 328498.72000000003
+    },
+    {
+      "code": "80100623",
+      "shop": "True Shop Central Rama 9",
+      "brand": "HONOR",
+      "targetQty": 13.670932948338745,
+      "targetNet": 56977.58
+    },
+    {
+      "code": "80100623",
+      "shop": "True Shop Central Rama 9",
+      "brand": "INFINIX",
+      "targetQty": 5.115670819453016,
+      "targetNet": 23586.26
+    },
+    {
+      "code": "80100623",
+      "shop": "True Shop Central Rama 9",
+      "brand": "IPAD",
+      "targetQty": 4.967467222124128,
+      "targetNet": 91895.00999999998
+    },
+    {
+      "code": "80100623",
+      "shop": "True Shop Central Rama 9",
+      "brand": "IPHONE",
+      "targetQty": 206.68517492304932,
+      "targetNet": 10552167.530000001
+    },
+    {
+      "code": "80100623",
+      "shop": "True Shop Central Rama 9",
+      "brand": "OPPO",
+      "targetQty": 30.195748700107035,
+      "targetNet": 293708.83
+    },
+    {
+      "code": "80100623",
+      "shop": "True Shop Central Rama 9",
+      "brand": "REALME",
+      "targetQty": 3.8089658823305035,
+      "targetNet": 36419.82
+    },
+    {
+      "code": "80100623",
+      "shop": "True Shop Central Rama 9",
+      "brand": "SAMSUNG",
+      "targetQty": 49.911363062988286,
+      "targetNet": 803821.5400000002
+    },
+    {
+      "code": "80100623",
+      "shop": "True Shop Central Rama 9",
+      "brand": "VIVO",
+      "targetQty": 27.57831331318159,
+      "targetNet": 347974.63000000006
+    },
+    {
+      "code": "80100623",
+      "shop": "True Shop Central Rama 9",
+      "brand": "XIAOMI",
+      "targetQty": 6.0673958139832305,
+      "targetNet": 77144.99000000002
+    },
+    {
+      "code": "80100715",
+      "shop": "True Shop Fortune Town 1Fl.",
+      "brand": "HONOR",
+      "targetQty": 1.6023102176068325,
+      "targetNet": 6827.59
+    },
+    {
+      "code": "80100715",
+      "shop": "True Shop Fortune Town 1Fl.",
+      "brand": "IPAD",
+      "targetQty": 1.17198884414311,
+      "targetNet": 26064.53
+    },
+    {
+      "code": "80100715",
+      "shop": "True Shop Fortune Town 1Fl.",
+      "brand": "IPHONE",
+      "targetQty": 18.266923233531777,
+      "targetNet": 829276.1800000002
+    },
+    {
+      "code": "80100715",
+      "shop": "True Shop Fortune Town 1Fl.",
+      "brand": "OPPO",
+      "targetQty": 0.8802230028399308,
+      "targetNet": 991.26
+    },
+    {
+      "code": "80100715",
+      "shop": "True Shop Fortune Town 1Fl.",
+      "brand": "REALME",
+      "targetQty": 2.2880243968069163,
+      "targetNet": 12933.910000000002
+    },
+    {
+      "code": "80100715",
+      "shop": "True Shop Fortune Town 1Fl.",
+      "brand": "SAMSUNG",
+      "targetQty": 14.305830434615634,
+      "targetNet": 107381.40999999999
+    },
+    {
+      "code": "80100715",
+      "shop": "True Shop Fortune Town 1Fl.",
+      "brand": "VIVO",
+      "targetQty": 2.891453942466943,
+      "targetNet": 8718.73
+    },
+    {
+      "code": "80100715",
+      "shop": "True Shop Fortune Town 1Fl.",
+      "brand": "XIAOMI",
+      "targetQty": 0.6332002838970424,
+      "targetNet": 1443.55
+    },
+    {
+      "code": "80100729",
+      "shop": "True Shop Station Lotus's Rama 4",
+      "brand": "HONOR",
+      "targetQty": 0.3642196026234199,
+      "targetNet": 1008.92
+    },
+    {
+      "code": "80100729",
+      "shop": "True Shop Station Lotus's Rama 4",
+      "brand": "IPAD",
+      "targetQty": 0.32939473276825415,
+      "targetNet": 4883.97
+    },
+    {
+      "code": "80100729",
+      "shop": "True Shop Station Lotus's Rama 4",
+      "brand": "IPHONE",
+      "targetQty": 9.574055463070495,
+      "targetNet": 427842.54
+    },
+    {
+      "code": "80100729",
+      "shop": "True Shop Station Lotus's Rama 4",
+      "brand": "OPPO",
+      "targetQty": 0.7665306510638352,
+      "targetNet": 5710.130000000001
+    },
+    {
+      "code": "80100729",
+      "shop": "True Shop Station Lotus's Rama 4",
+      "brand": "SAMSUNG",
+      "targetQty": 12.065640286315286,
+      "targetNet": 40747.53
+    },
+    {
+      "code": "80100729",
+      "shop": "True Shop Station Lotus's Rama 4",
+      "brand": "VIVO",
+      "targetQty": 2.285000544729429,
+      "targetNet": 5490.66
+    },
+    {
+      "code": "80100729",
+      "shop": "True Shop Station Lotus's Rama 4",
+      "brand": "XIAOMI",
+      "targetQty": 0.557025879614849,
+      "targetNet": 1269.89
+    },
+    {
+      "code": "80100836",
+      "shop": "True Shop Central World 4Fl.",
+      "brand": "HONOR",
+      "targetQty": 40.138503481270746,
+      "targetNet": 428138.30000000005
+    },
+    {
+      "code": "80100836",
+      "shop": "True Shop Central World 4Fl.",
+      "brand": "HUAWEI",
+      "targetQty": 42.05691017158233,
+      "targetNet": 886532.97
+    },
+    {
+      "code": "80100836",
+      "shop": "True Shop Central World 4Fl.",
+      "brand": "IPAD",
+      "targetQty": 21.251852665583826,
+      "targetNet": 465134.67999999993
+    },
+    {
+      "code": "80100836",
+      "shop": "True Shop Central World 4Fl.",
+      "brand": "IPHONE",
+      "targetQty": 549.6573282081699,
+      "targetNet": 27803106.679999996
+    },
+    {
+      "code": "80100836",
+      "shop": "True Shop Central World 4Fl.",
+      "brand": "OPPO",
+      "targetQty": 55.11534353817745,
+      "targetNet": 803633.3599999999
+    },
+    {
+      "code": "80100836",
+      "shop": "True Shop Central World 4Fl.",
+      "brand": "REALME",
+      "targetQty": 3.1792947334995665,
+      "targetNet": 23024.01
+    },
+    {
+      "code": "80100836",
+      "shop": "True Shop Central World 4Fl.",
+      "brand": "SAMSUNG",
+      "targetQty": 112.87872553074459,
+      "targetNet": 1894962.9500000007
+    },
+    {
+      "code": "80100836",
+      "shop": "True Shop Central World 4Fl.",
+      "brand": "VIVO",
+      "targetQty": 59.21612197965522,
+      "targetNet": 660527.7800000001
+    },
+    {
+      "code": "80100836",
+      "shop": "True Shop Central World 4Fl.",
+      "brand": "XIAOMI",
+      "targetQty": 42.962549727603246,
+      "targetNet": 624832.3900000001
+    },
+    {
+      "code": "80101068",
+      "shop": "True Shop Central Rama 3",
+      "brand": "HONOR",
+      "targetQty": 10.30907328196885,
+      "targetNet": 66535.32
+    },
+    {
+      "code": "80101068",
+      "shop": "True Shop Central Rama 3",
+      "brand": "INFINIX",
+      "targetQty": 2.806285343247189,
+      "targetNet": 17550.37
+    },
+    {
+      "code": "80101068",
+      "shop": "True Shop Central Rama 3",
+      "brand": "IPAD",
+      "targetQty": 10.71535401219559,
+      "targetNet": 225374.2
+    },
+    {
+      "code": "80101068",
+      "shop": "True Shop Central Rama 3",
+      "brand": "IPHONE",
+      "targetQty": 283.13082518612464,
+      "targetNet": 13996314.269999998
+    },
+    {
+      "code": "80101068",
+      "shop": "True Shop Central Rama 3",
+      "brand": "OPPO",
+      "targetQty": 70.79455197307948,
+      "targetNet": 482857.84
+    },
+    {
+      "code": "80101068",
+      "shop": "True Shop Central Rama 3",
+      "brand": "REALME",
+      "targetQty": 2.146501695658168,
+      "targetNet": 16800.14
+    },
+    {
+      "code": "80101068",
+      "shop": "True Shop Central Rama 3",
+      "brand": "SAMSUNG",
+      "targetQty": 116.69935692146451,
+      "targetNet": 1703775.0700000005
+    },
+    {
+      "code": "80101068",
+      "shop": "True Shop Central Rama 3",
+      "brand": "VIVO",
+      "targetQty": 34.21183085016982,
+      "targetNet": 359061.31
+    },
+    {
+      "code": "80101068",
+      "shop": "True Shop Central Rama 3",
+      "brand": "XIAOMI",
+      "targetQty": 10.087564584750316,
+      "targetNet": 122579.37999999999
+    },
+    {
+      "code": "80101186",
+      "shop": "True Shop Central Festival East Ville",
+      "brand": "HONOR",
+      "targetQty": 7.080741400620084,
+      "targetNet": 50714.72
+    },
+    {
+      "code": "80101186",
+      "shop": "True Shop Central Festival East Ville",
+      "brand": "INFINIX",
+      "targetQty": 1.022231736767914,
+      "targetNet": 13356.91
+    },
+    {
+      "code": "80101186",
+      "shop": "True Shop Central Festival East Ville",
+      "brand": "IPAD",
+      "targetQty": 13.58868225585583,
+      "targetNet": 269371.10000000003
+    },
+    {
+      "code": "80101186",
+      "shop": "True Shop Central Festival East Ville",
+      "brand": "IPHONE",
+      "targetQty": 323.1026330057769,
+      "targetNet": 16074227.189999998
+    },
+    {
+      "code": "80101186",
+      "shop": "True Shop Central Festival East Ville",
+      "brand": "OPPO",
+      "targetQty": 51.550940367040155,
+      "targetNet": 364557.42
+    },
+    {
+      "code": "80101186",
+      "shop": "True Shop Central Festival East Ville",
+      "brand": "REALME",
+      "targetQty": 2.146501695658168,
+      "targetNet": 16800.14
+    },
+    {
+      "code": "80101186",
+      "shop": "True Shop Central Festival East Ville",
+      "brand": "SAMSUNG",
+      "targetQty": 110.10552880956122,
+      "targetNet": 1432113.7599999998
+    },
+    {
+      "code": "80101186",
+      "shop": "True Shop Central Festival East Ville",
+      "brand": "VIVO",
+      "targetQty": 61.972303648902155,
+      "targetNet": 750857.78
+    },
+    {
+      "code": "80101186",
+      "shop": "True Shop Central Festival East Ville",
+      "brand": "XIAOMI",
+      "targetQty": 19.828226025713448,
+      "targetNet": 218352.96
+    },
+    {
+      "code": "80101221",
+      "shop": "True Shop Emquartier",
+      "brand": "HONOR",
+      "targetQty": 0.19767248920479924,
+      "targetNet": 547.57
+    },
+    {
+      "code": "80101221",
+      "shop": "True Shop Emquartier",
+      "brand": "IPAD",
+      "targetQty": 5.136316158962499,
+      "targetNet": 108644.74
+    },
+    {
+      "code": "80101221",
+      "shop": "True Shop Emquartier",
+      "brand": "IPHONE",
+      "targetQty": 194.02555305941206,
+      "targetNet": 9701526.41
+    },
+    {
+      "code": "80101221",
+      "shop": "True Shop Emquartier",
+      "brand": "OPPO",
+      "targetQty": 3.389094826096839,
+      "targetNet": 39751.84
+    },
+    {
+      "code": "80101221",
+      "shop": "True Shop Emquartier",
+      "brand": "REALME",
+      "targetQty": 3.112333294230292,
+      "targetNet": 14700.350000000002
+    },
+    {
+      "code": "80101221",
+      "shop": "True Shop Emquartier",
+      "brand": "SAMSUNG",
+      "targetQty": 94.12785673765968,
+      "targetNet": 1472057.6
+    },
+    {
+      "code": "80101221",
+      "shop": "True Shop Emquartier",
+      "brand": "VIVO",
+      "targetQty": 3.3400199908250157,
+      "targetNet": 58012.15000000001
+    },
+    {
+      "code": "80101221",
+      "shop": "True Shop Emquartier",
+      "brand": "XIAOMI",
+      "targetQty": 0.4315482216109087,
+      "targetNet": 983.83
+    },
+    {
+      "code": "80101269",
+      "shop": "True Shop Mahboon Krong 4Fl.",
+      "brand": "HONOR",
+      "targetQty": 1.7457815424936285,
+      "targetNet": 6217.08
+    },
+    {
+      "code": "80101269",
+      "shop": "True Shop Mahboon Krong 4Fl.",
+      "brand": "IPAD",
+      "targetQty": 0.571479766397254,
+      "targetNet": 8473.39
+    },
+    {
+      "code": "80101269",
+      "shop": "True Shop Mahboon Krong 4Fl.",
+      "brand": "IPHONE",
+      "targetQty": 55.40723063895088,
+      "targetNet": 2617228.6599999997
+    },
+    {
+      "code": "80101269",
+      "shop": "True Shop Mahboon Krong 4Fl.",
+      "brand": "OPPO",
+      "targetQty": 2.4429520978148678,
+      "targetNet": 22167.11
+    },
+    {
+      "code": "80101269",
+      "shop": "True Shop Mahboon Krong 4Fl.",
+      "brand": "REALME",
+      "targetQty": 2.146501695658168,
+      "targetNet": 16800.14
+    },
+    {
+      "code": "80101269",
+      "shop": "True Shop Mahboon Krong 4Fl.",
+      "brand": "SAMSUNG",
+      "targetQty": 56.953204033257,
+      "targetNet": 658014.9000000001
+    },
+    {
+      "code": "80101269",
+      "shop": "True Shop Mahboon Krong 4Fl.",
+      "brand": "VIVO",
+      "targetQty": 47.99270011069217,
+      "targetNet": 524217.52999999997
+    },
+    {
+      "code": "80101269",
+      "shop": "True Shop Mahboon Krong 4Fl.",
+      "brand": "XIAOMI",
+      "targetQty": 0.19124749664307472,
+      "targetNet": 436
+    },
+    {
+      "code": "80101349",
+      "shop": "True Shop Silom Complex",
+      "brand": "HONOR",
+      "targetQty": 1.258494955998158,
+      "targetNet": 4276.46
+    },
+    {
+      "code": "80101349",
+      "shop": "True Shop Silom Complex",
+      "brand": "INFINIX",
+      "targetQty": 4.569828345118956,
+      "targetNet": 19525.53
+    },
+    {
+      "code": "80101349",
+      "shop": "True Shop Silom Complex",
+      "brand": "IPAD",
+      "targetQty": 2.884790681825342,
+      "targetNet": 53822.45
+    },
+    {
+      "code": "80101349",
+      "shop": "True Shop Silom Complex",
+      "brand": "IPHONE",
+      "targetQty": 69.68332268948964,
+      "targetNet": 3174070.53
+    },
+    {
+      "code": "80101349",
+      "shop": "True Shop Silom Complex",
+      "brand": "OPPO",
+      "targetQty": 25.29618210896551,
+      "targetNet": 206083.25999999998
+    },
+    {
+      "code": "80101349",
+      "shop": "True Shop Silom Complex",
+      "brand": "REALME",
+      "targetQty": 2.146501695658168,
+      "targetNet": 16800.14
+    },
+    {
+      "code": "80101349",
+      "shop": "True Shop Silom Complex",
+      "brand": "SAMSUNG",
+      "targetQty": 57.66311791860955,
+      "targetNet": 477872.22
+    },
+    {
+      "code": "80101349",
+      "shop": "True Shop Silom Complex",
+      "brand": "VIVO",
+      "targetQty": 12.140675453468274,
+      "targetNet": 63428.56
+    },
+    {
+      "code": "80101349",
+      "shop": "True Shop Silom Complex",
+      "brand": "XIAOMI",
+      "targetQty": 0.725363154355016,
+      "targetNet": 1653.66
+    },
+    {
+      "code": "80101363",
+      "shop": "True Shop at Chamchuri Square 1",
+      "brand": "HONOR",
+      "targetQty": 4.929790014553133,
+      "targetNet": 36341.689999999995
+    },
+    {
+      "code": "80101363",
+      "shop": "True Shop at Chamchuri Square 1",
+      "brand": "IPAD",
+      "targetQty": 1.5991052220420738,
+      "targetNet": 40314.53
+    },
+    {
+      "code": "80101363",
+      "shop": "True Shop at Chamchuri Square 1",
+      "brand": "IPHONE",
+      "targetQty": 36.66760985101981,
+      "targetNet": 1704480.06
+    },
+    {
+      "code": "80101363",
+      "shop": "True Shop at Chamchuri Square 1",
+      "brand": "OPPO",
+      "targetQty": 6.355659865256927,
+      "targetNet": 51105.06
+    },
+    {
+      "code": "80101363",
+      "shop": "True Shop at Chamchuri Square 1",
+      "brand": "REALME",
+      "targetQty": 9.217282888574683,
+      "targetNet": 37540.74
+    },
+    {
+      "code": "80101363",
+      "shop": "True Shop at Chamchuri Square 1",
+      "brand": "SAMSUNG",
+      "targetQty": 31.176223783008084,
+      "targetNet": 305532.68999999994
+    },
+    {
+      "code": "80101363",
+      "shop": "True Shop at Chamchuri Square 1",
+      "brand": "VIVO",
+      "targetQty": 3.6481195293042745,
+      "targetNet": 14248.3
+    },
+    {
+      "code": "80101363",
+      "shop": "True Shop at Chamchuri Square 1",
+      "brand": "XIAOMI",
+      "targetQty": 2.3619449474753464,
+      "targetNet": 11602.39
+    },
+    {
+      "code": "80101630",
+      "shop": "Kiosk Lotus's Ramindra",
+      "brand": "HONOR",
+      "targetQty": 0.7974456228954439,
+      "targetNet": 3590.2300000000005
+    },
+    {
+      "code": "80101630",
+      "shop": "Kiosk Lotus's Ramindra",
+      "brand": "IPHONE",
+      "targetQty": 4.362052901482129,
+      "targetNet": 206985.81999999995
+    },
+    {
+      "code": "80101630",
+      "shop": "Kiosk Lotus's Ramindra",
+      "brand": "OPPO",
+      "targetQty": 12.202882172197326,
+      "targetNet": 82751.06
+    },
+    {
+      "code": "80101630",
+      "shop": "Kiosk Lotus's Ramindra",
+      "brand": "SAMSUNG",
+      "targetQty": 13.646140969676114,
+      "targetNet": 156653.02999999997
+    },
+    {
+      "code": "80101630",
+      "shop": "Kiosk Lotus's Ramindra",
+      "brand": "VIVO",
+      "targetQty": 3.509879958732706,
+      "targetNet": 8433.94
+    },
+    {
+      "code": "80101630",
+      "shop": "Kiosk Lotus's Ramindra",
+      "brand": "XIAOMI",
+      "targetQty": 2.0338425578210506,
+      "targetNet": 4636.69
+    },
+    {
+      "code": "80101633",
+      "shop": "True Shop Makro Sri Ayutthaya",
+      "brand": "HONOR",
+      "targetQty": 1.370874159554566,
+      "targetNet": 3840.62
+    },
+    {
+      "code": "80101633",
+      "shop": "True Shop Makro Sri Ayutthaya",
+      "brand": "IPAD",
+      "targetQty": 0.5397884802139903,
+      "targetNet": 8003.5
+    },
+    {
+      "code": "80101633",
+      "shop": "True Shop Makro Sri Ayutthaya",
+      "brand": "IPHONE",
+      "targetQty": 6.644923798410197,
+      "targetNet": 287657.73
+    },
+    {
+      "code": "80101633",
+      "shop": "True Shop Makro Sri Ayutthaya",
+      "brand": "SAMSUNG",
+      "targetQty": 10.357444229470625,
+      "targetNet": 64024.27999999999
+    },
+    {
+      "code": "80101633",
+      "shop": "True Shop Makro Sri Ayutthaya",
+      "brand": "VIVO",
+      "targetQty": 1.4947242671402265,
+      "targetNet": 5479.29
+    },
+    {
+      "code": "80101633",
+      "shop": "True Shop Makro Sri Ayutthaya",
+      "brand": "XIAOMI",
+      "targetQty": 4.568342874886017,
+      "targetNet": 38565.33
+    },
+    {
+      "code": "80101667",
+      "shop": "True Shop Supreme Complex (D)",
+      "brand": "HONOR",
+      "targetQty": 0.9412298957514736,
+      "targetNet": 2645.84
+    },
+    {
+      "code": "80101667",
+      "shop": "True Shop Supreme Complex (D)",
+      "brand": "IPHONE",
+      "targetQty": 8.47226032931718,
+      "targetNet": 374733.6
+    },
+    {
+      "code": "80101667",
+      "shop": "True Shop Supreme Complex (D)",
+      "brand": "OPPO",
+      "targetQty": 6.2457003747455175,
+      "targetNet": 53211.399999999994
+    },
+    {
+      "code": "80101667",
+      "shop": "True Shop Supreme Complex (D)",
+      "brand": "REALME",
+      "targetQty": 2.9825060084286252,
+      "targetNet": 14292.290000000003
+    },
+    {
+      "code": "80101667",
+      "shop": "True Shop Supreme Complex (D)",
+      "brand": "SAMSUNG",
+      "targetQty": 17.976586574937492,
+      "targetNet": 139069.87
+    },
+    {
+      "code": "80101667",
+      "shop": "True Shop Supreme Complex (D)",
+      "brand": "VIVO",
+      "targetQty": 7.39256896660366,
+      "targetNet": 31792.290000000005
+    },
+    {
+      "code": "80101667",
+      "shop": "True Shop Supreme Complex (D)",
+      "brand": "XIAOMI",
+      "targetQty": 0.4323026842123447,
+      "targetNet": 985.55
+    }
+  ]
+}
