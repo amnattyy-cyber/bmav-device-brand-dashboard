@@ -341,3 +341,11 @@ footer { margin-top: 85px; border-top: 1px solid var(--line); min-height: 120px;
   main:not(.capture-focus-stock) .focus-stock-table { min-width: 980px; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+.target-month-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; padding: 20px 24px; margin-bottom: 24px; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 18px; color: #312e81; }
+.target-month-summary > div { display: grid; gap: 6px; margin-right: auto; }
+.target-month-summary strong, .target-month-summary > b { font-size: 18px; }
+.target-month-summary span, .target-month-summary p { font-size: 15px; }
+.target-month-summary p { width: 100%; margin: 0; }
+.target-planning h2:not(:first-child) { margin-top: 32px; }
+.target-planning table { min-width: 600px; }
+.target-planning tfoot { background: #f5f3ff; font-weight: 700; }

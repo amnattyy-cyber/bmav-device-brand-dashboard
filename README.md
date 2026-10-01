@@ -1,6 +1,6 @@
 # BMAV Device by Brand Dashboard
 
-Public interactive dashboard for BMA V - Central device performance in August 2026.
+Public interactive dashboard for BMA V - Central device performance, with monthly selection including October 2026.
 
 ## Features
 
@@ -29,7 +29,16 @@ Public interactive dashboard for BMA V - Central device performance in August 20
 
 The active period is compared on an equal-day basis with the immediately preceding calendar week. For 3–9 August, the comparison starts on 27 July and continues through 2 August when all seven days are available. An in-progress period only includes dates available through the latest live sales date, so a partial week is never compared with more elapsed days than it contains. Week 36 spans 31 August–6 September and continues to work across the month boundary because the dashboard retains date-keyed live sales rows. A missing comparison base is shown as a neutral gray badge instead of a growth percentage.
 
-## GitHub Pages
+## October 2026 targets
+
+- `src/october-targets.json` contains the October workbook targets from `TG Device By Brand Oct B5 GPT.xlsx`: `TG device` columns O/P (QTY/Net amount), and `TG By brand` columns T/V (OPERATION_TARGET_QTY/OPERATION_TARGET_NET_AMOUNT). Brand rows are aggregated by Shop Code and Brand; WW shop codes match the live sales keys.
+- Device totals and the 120 shop/brand target rows reconcile to **4,237.671719056332 QTY** and **139,215,088.76 Net Amount**, across 15 shops with targets and 10 brands. The Device source also retains three zero-target shops. Fractional targets are preserved without rounding during calculation.
+- October targets are selected by `2026-10`, independently of the latest sales month. October remains selectable before sales arrive; the page identifies the missing sales period and displays the full-month target. Other months retain their existing target routing, and sales-only shop/brand rows remain included.
+- ALL-brand KPIs, Shop Performance and the ALL column in Brand × Shop use Device targets; brand columns use the corresponding Brand targets. Source totals also reconcile per shop. No target scaling or redistribution is applied.
+- Sales, model sales, stock, JSONP, LIVE status, latest-sales default and the five-minute refresh remain connected to the existing feeds. The workbook target snapshot is versioned in this repository; the Google Sheet itself is unchanged.
+- Existing calendar weeks cover October (Week 40–44), including the September/October boundary. Changing Month resets the selected week to that month's latest available date.
+
+## GitHub Pages publishing
 
 The production dashboard is published from the `docs` folder on `main`.
 
