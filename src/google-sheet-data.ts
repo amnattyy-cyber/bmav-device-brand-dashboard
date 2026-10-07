@@ -1,7 +1,7 @@
 import fallbackJson from "./dashboard-data.json";
 import octoberTargets from "./october-targets.json";
 import { parseCsv, parseModelSalesTable, type ModelSale } from "./model-sales";
-import { parseStockTable, type StockRow } from "./stock-data";
+import { focusModels, parseStockTable, type StockRow } from "./stock-data";
 
 export type DataRow = {
   brand?: string;
@@ -197,7 +197,11 @@ async function fetchSheetPage(sheetName: string, tableQuery?: string): Promise<s
 
 async function fetchStockSheet(): Promise<string[][]> {
   const callbackName = `bmavStock_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const tableQuery = "select A,C,D,G,H,I,J,M,P where J = 'BMA V - Central' and G > 0 and (D starts with 'H/S,SS,GALAXY A06,5G,4/64GB' or D starts with 'H/S,OPPO,A6C' or D starts with 'H/S,VIVO,Y05' or D starts with 'H/S,XIAOMI,REDMI A7 PRO' or D starts with 'H/S,HONOR,X5C PLUS' or D starts with 'H/S,INFINIX,SMART 20' or D starts with 'H/S,REALME NOTE 80')";
+  const focusProducts = focusModels
+    .flatMap((definition) => definition.stockPrefixes)
+    .map((prefix) => `D starts with '${prefix}'`)
+    .join(" or ");
+  const tableQuery = `select A,C,D,G,H,I,J,M,P where J = 'BMA V - Central' and G > 0 and (${focusProducts})`;
   const query = new URLSearchParams({
     sheet: STOCK_SHEET_NAME,
     tq: tableQuery,
