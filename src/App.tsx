@@ -5,7 +5,7 @@ import { analyzeBrandExecutive, type ExecutiveBrandRow, type ExecutiveShopRow } 
 import { dashboardForMonth, dashboardMonths, fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DailySale, type DataRow } from "./google-sheet-data";
 import { focusPeriod, selectedDayFromDate, type FocusView } from "./focus-period";
 import { clampModelSalesDateRange, modelSaleKey, modelShopInsight, summarizeModelSales } from "./model-sales";
-import { focusStockKey } from "./stock-data";
+import { focusModels, focusSalesKey, focusStockKey } from "./stock-data";
 import { comparableWeekPeriod, previousWeekId, shortDateRange, weekDataStatus, weekIndexForDate, weekRanges, wowChangeRate } from "./wow-periods";
 
 type Metric = "net" | "qty";
@@ -28,16 +28,6 @@ const brandColors: Record<string, string> = {
   OPPO: "#16a34a", XIAOMI: "#f97316", HUAWEI: "#e11d48", HONOR: "#0891b2",
   INFINIX: "#65a30d", NOTHING: "#111827", REALME: "#eab308", ALLDOCUBE: "#64748b",
 };
-
-const focusModels = [
-  { key: "samsung-a06-5g", label: "Samsung A06 5G", brand: "SAMSUNG", match: (model: string) => /GALAXY A06 5G/i.test(model) },
-  { key: "oppo-a6c", label: "OPPO A6C", brand: "OPPO", match: (model: string) => /OPPO A6C/i.test(model) },
-  { key: "vivo-y05", label: "vivo Y05", brand: "VIVO", match: (model: string) => /VIVO Y05/i.test(model) },
-  { key: "xiaomi-redmi-a7-pro", label: "Xiaomi Redmi A7 Pro", brand: "XIAOMI", match: (model: string) => /REDMI A7 PRO/i.test(model) },
-  { key: "honor-x5c", label: "Honor X5c", brand: "HONOR", match: (model: string) => /HONOR X5C/i.test(model) },
-  { key: "infinix-smart20", label: "Infinix Smart20", brand: "INFINIX", match: (model: string) => /INFINIX SMART\s*20/i.test(model) },
-  { key: "realme-note80", label: "Realme Note80", brand: "REALME", match: (model: string) => /REALME NOTE\s*80/i.test(model) },
-] as const;
 
 const number = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 1 });
 const integer = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 });
@@ -721,7 +711,10 @@ export default function Home() {
     const period = focusPeriod(focusView, monthPrefix, selectedDate);
     const mtdScoped = data.modelSales.filter((sale) => sale.date >= `${monthPrefix}-01` && sale.date <= selectedDate && (selectedShops.length === 0 || selectedShops.includes(sale.code)));
     const scoped = mtdScoped.filter((sale) => sale.date >= period.start);
-    const definitionFor = (model: string) => focusModels.find((definition) => definition.match(model));
+    const definitionFor = (model: string) => {
+      const key = focusSalesKey(model);
+      return focusModels.find((definition) => definition.key === key);
+    };
     const mapped = scoped.map((sale) => ({ sale, definition: definitionFor(sale.model) })).filter((item): item is typeof item & { definition: typeof focusModels[number] } => Boolean(item.definition));
     const mtdMapped = mtdScoped.map((sale) => ({ sale, definition: definitionFor(sale.model) })).filter((item): item is typeof item & { definition: typeof focusModels[number] } => Boolean(item.definition));
     const rows = focusModels.map((definition) => {
@@ -794,7 +787,7 @@ export default function Home() {
     const visibleCodes = new Set(visibleShops.map(([code]) => code));
     const scoped = data.stock.filter((row) => visibleCodes.has(row.code));
     const rows = focusModels.map((definition) => {
-      const stock = scoped.filter((row) => focusStockKey(row.model) === definition.key);
+      const stock = scoped.filter((row) => focusStockKey(row.productName) === definition.key);
       const sales = focusModelMonitor.rows.find((row) => row.key === definition.key)?.mtdTotal.qty ?? 0;
       const balance = stock.reduce((sum, row) => sum + row.balance, 0);
       const amount = stock.reduce((sum, row) => sum + row.amount, 0);
@@ -804,7 +797,7 @@ export default function Home() {
     });
     const shopRows = visibleShops.map(([code, shop]) => {
       const values = Object.fromEntries(focusModels.map((definition) => {
-        const stock = scoped.filter((row) => row.code === code && focusStockKey(row.model) === definition.key);
+        const stock = scoped.filter((row) => row.code === code && focusStockKey(row.productName) === definition.key);
         return [definition.key, {
           balance: stock.reduce((sum, row) => sum + row.balance, 0),
           amount: stock.reduce((sum, row) => sum + row.amount, 0),
@@ -1168,10 +1161,10 @@ export default function Home() {
           </div>
 
           <section className={`focus-model-monitor-card focus-model-daily-card ${modelTableCapture === "focus-models" ? "model-capture-target" : ""}`} aria-labelledby="focus-model-monitor-title">
-            <header><div><span>MODEL FOCUS · DAILY MONITOR</span><h3 id="focus-model-monitor-title">ยอดขายรายวัน 7 รุ่น Focus</h3><p>{data.month} • {focusPeriodLabel} • {shopName}</p></div><div className="model-card-actions focus-model-actions"><div className="focus-period-controls"><label htmlFor="focus-date-filter"><span>วันที่ Focus</span><input id="focus-date-filter" type="date" min={`${monthPrefix}-01`} max={data.latest} value={formatDate(selectedDay)} onChange={(event) => selectDashboardDate(event.target.value, true)} /></label><div className="focus-view-control" role="group" aria-label="เลือกมุมมองยอดขาย 7 รุ่น Focus"><span>มุมมอง</span><div className="segmented"><button className={focusView === "daily" ? "selected" : ""} type="button" onClick={() => setFocusView("daily")}>Daily</button><button className={focusView === "mtd" ? "selected" : ""} type="button" onClick={() => setFocusView("mtd")}>MTD</button></div></div></div>{captureButton("focus-models", "focus-model-monitor-title")}</div></header>
+            <header><div><span>MODEL FOCUS · DAILY MONITOR</span><h3 id="focus-model-monitor-title">ยอดขายรายวัน {focusModels.length} รุ่น Focus</h3><p>{data.month} • {focusPeriodLabel} • {shopName}</p></div><div className="model-card-actions focus-model-actions"><div className="focus-period-controls"><label htmlFor="focus-date-filter"><span>วันที่ Focus</span><input id="focus-date-filter" type="date" min={`${monthPrefix}-01`} max={data.latest} value={formatDate(selectedDay)} onChange={(event) => selectDashboardDate(event.target.value, true)} /></label><div className="focus-view-control" role="group" aria-label={`เลือกมุมมองยอดขาย ${focusModels.length} รุ่น Focus`}><span>มุมมอง</span><div className="segmented"><button className={focusView === "daily" ? "selected" : ""} type="button" onClick={() => setFocusView("daily")}>Daily</button><button className={focusView === "mtd" ? "selected" : ""} type="button" onClick={() => setFocusView("mtd")}>MTD</button></div></div></div>{captureButton("focus-models", "focus-model-monitor-title")}</div></header>
             <div className="focus-model-summary">{focusModelMonitor.rows.map((row) => <article key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}><span>{row.label}</span><strong>{integer.format(row.total.qty)} เครื่อง</strong><small>Net ฿{integer.format(row.total.net)} • {row.activeShops} สาขา</small></article>)}</div>
             <div className="focus-model-table-wrap"><table className="focus-model-table focus-model-daily-table">
-              <colgroup><col className="focus-daily-date-column" /><col span={8} className="focus-daily-value-column" /></colgroup>
+              <colgroup><col className="focus-daily-date-column" /><col span={focusModelMonitor.rows.length + 1} className="focus-daily-value-column" /></colgroup>
               <thead><tr><th>Date</th>{focusModelMonitor.rows.map((row) => <th key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.label}<small>{row.brand}</small></th>)}<th>Total Focus</th></tr></thead>
               <tbody>{focusModelMonitor.daily.map((row) => <tr key={row.date}><th>{compactDate(row.date)}</th>{focusModelMonitor.rows.map((model) => { const value = row.values[model.key]; return <td key={model.key}><strong>{integer.format(value.qty)}</strong><small>฿{integer.format(value.net)}</small></td>; })}<td className="focus-daily-total"><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td></tr>)}</tbody>
               <tfoot><tr><th>{focusView === "daily" ? "Daily Total" : "MTD Total"}</th>{focusModelMonitor.rows.map((row) => <td key={row.key}><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td>)}<td><strong>{integer.format(focusModelMonitor.total.qty)}</strong><small>฿{integer.format(focusModelMonitor.total.net)}</small></td></tr></tfoot>
@@ -1179,9 +1172,9 @@ export default function Home() {
           </section>
 
           <section className={`focus-model-monitor-card focus-model-trend-card ${modelTableCapture === "focus-trend" ? "model-capture-target" : ""}`} aria-labelledby="focus-model-trend-title">
-            <header><div><span>MODEL FOCUS · DAILY TREND</span><h3 id="focus-model-trend-title">Trend By Model Focus</h3><p>ยอดขาย QTY รายวัน 7 รุ่น • 1–{selectedDay} {shortMonth} • {shopName}</p></div><div className="model-card-actions"><p>สีเส้นแยกตาม Brand • จุดแสดงยอดขายรายวัน</p><button className={`capture-view-button ${modelTableCapture === "focus-trend" ? "active" : ""}`} type="button" aria-pressed={modelTableCapture === "focus-trend"} onClick={() => toggleModelCapture("focus-trend", "focus-model-trend-title")}><span aria-hidden="true">{modelTableCapture === "focus-trend" ? "×" : "▣"}</span>{modelTableCapture === "focus-trend" ? "ออกจาก Capture" : "Capture Chart"}</button></div></header>
+            <header><div><span>MODEL FOCUS · DAILY TREND</span><h3 id="focus-model-trend-title">Trend By Model Focus</h3><p>ยอดขาย QTY รายวัน {focusModels.length} รุ่น • 1–{selectedDay} {shortMonth} • {shopName}</p></div><div className="model-card-actions"><p>สีเส้นแยกตาม Brand • จุดแสดงยอดขายรายวัน</p><button className={`capture-view-button ${modelTableCapture === "focus-trend" ? "active" : ""}`} type="button" aria-pressed={modelTableCapture === "focus-trend"} onClick={() => toggleModelCapture("focus-trend", "focus-model-trend-title")}><span aria-hidden="true">{modelTableCapture === "focus-trend" ? "×" : "▣"}</span>{modelTableCapture === "focus-trend" ? "ออกจาก Capture" : "Capture Chart"}</button></div></header>
             <div className="focus-trend-chart-wrap">
-              <svg className="focus-trend-chart" viewBox={`0 0 ${focusTrendChart.width} ${focusTrendChart.height}`} role="img" aria-label={`กราฟยอดขายรายวัน 7 รุ่น Focus ถึงวันที่ ${selectedDay} ${shortMonth}`}>
+              <svg className="focus-trend-chart" viewBox={`0 0 ${focusTrendChart.width} ${focusTrendChart.height}`} role="img" aria-label={`กราฟยอดขายรายวัน ${focusModels.length} รุ่น Focus ถึงวันที่ ${selectedDay} ${shortMonth}`}>
                 {focusTrendChart.ticks.map((tick) => <g key={tick.value}><line x1={focusTrendChart.left} x2={focusTrendChart.width - focusTrendChart.right} y1={tick.y} y2={tick.y} className="focus-trend-grid" /><text x={focusTrendChart.left - 12} y={tick.y + 4} className="focus-trend-y-label">{tick.value}</text></g>)}
                 <text x="15" y={focusTrendChart.top + focusTrendChart.plotHeight / 2} className="focus-trend-axis-title" transform={`rotate(-90 15 ${focusTrendChart.top + focusTrendChart.plotHeight / 2})`}>Units sold</text>
                 {focusTrendChart.series.map((series) => <g key={series.key}>
@@ -1197,7 +1190,7 @@ export default function Home() {
           <section className={`focus-model-monitor-card focus-model-shop-card ${modelTableCapture === "focus-shops" ? "model-capture-target" : ""}`} aria-labelledby="focus-model-shop-title">
             <header><div><span>MODEL FOCUS · BY SHOP</span><h3 id="focus-model-shop-title">ยอดขาย Model Focus รายสาขา</h3><p>{data.month} • {focusPeriodLabel} • {focusModelMonitor.shopRows.length} สาขา รวมสาขาที่ยังไม่มียอด</p></div><div className="model-card-actions"><p>เรียงตาม {modelSort === "net" ? "Net Amount" : "QTY"} • แสดง QTY และ Net • ใช้มุมมอง Focus ด้านบน</p>{captureButton("focus-shops", "focus-model-shop-title")}</div></header>
             <div className="focus-model-table-wrap"><table className="focus-model-table focus-model-shop-table">
-              <colgroup><col className="focus-shop-name-column" /><col span={8} className="focus-shop-value-column" /></colgroup>
+              <colgroup><col className="focus-shop-name-column" /><col span={focusModelMonitor.rows.length + 1} className="focus-shop-value-column" /></colgroup>
               <thead><tr><th>Shop</th>{focusModelMonitor.rows.map((row) => <th key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.label}<small>{row.brand}</small></th>)}<th>Total Focus</th></tr></thead>
               <tbody>{focusModelMonitor.shopRows.map((row) => <tr className={row.total.qty === 0 ? "focus-no-sales-row" : ""} key={row.code}><th><strong>{row.shop}</strong><small>{row.code}{row.total.qty === 0 ? <b className="focus-no-sales-badge">No Sales</b> : ""}</small></th>{focusModelMonitor.rows.map((model) => { const value = row.values[model.key]; return <td key={model.key}><strong>{integer.format(value.qty)}</strong><small>฿{integer.format(value.net)}</small></td>; })}<td className="focus-daily-total"><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td></tr>)}</tbody>
               <tfoot><tr><th>Grand Total</th>{focusModelMonitor.rows.map((row) => <td key={row.key}><strong>{integer.format(row.total.qty)}</strong><small>฿{integer.format(row.total.net)}</small></td>)}<td><strong>{integer.format(focusModelMonitor.total.qty)}</strong><small>฿{integer.format(focusModelMonitor.total.net)}</small></td></tr></tfoot>
@@ -1205,11 +1198,11 @@ export default function Home() {
           </section>
 
           <section className={`focus-model-monitor-card focus-stock-card ${modelTableCapture === "focus-stock" ? "model-capture-target" : ""}`} aria-labelledby="focus-stock-title">
-            <header><div><span>MODEL FOCUS · STOCK SNAPSHOT</span><h3 id="focus-stock-title">Stock ล่าสุด 7 รุ่น Focus รายสาขา</h3><p>Data Stock B5 • {focusStockMonitor.shopCount} สาขาตามตัวกรอง • Stock เป็นข้อมูลล่าสุดและไม่เปลี่ยนตาม Month</p></div><div className="model-card-actions"><p><b className={`stock-source-badge ${data.stock.length ? "live" : "unavailable"}`}>{data.stock.length ? "STOCK LIVE" : "STOCK ERROR"}</b> {data.stock.length ? `${integer.format(data.stock.length)} รายการ` : "เชื่อมต่อไม่สำเร็จ"}{data.stock.length && lastSync ? ` • Sync ${lastSync.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}` : ""} • รีเฟรชทุก 5 นาที</p>{captureButton("focus-stock", "focus-stock-title")}</div></header>
+            <header><div><span>MODEL FOCUS · STOCK SNAPSHOT</span><h3 id="focus-stock-title">Stock ล่าสุด {focusModels.length} รุ่น Focus รายสาขา</h3><p>Data Stock B5 • Device เท่านั้น • {focusStockMonitor.shopCount} สาขาตามตัวกรอง • Stock เป็นข้อมูลล่าสุดและไม่เปลี่ยนตาม Month</p></div><div className="model-card-actions"><p><b className={`stock-source-badge ${data.stock.length ? "live" : "unavailable"}`}>{data.stock.length ? "STOCK LIVE" : "STOCK ERROR"}</b> {data.stock.length ? `${integer.format(data.stock.length)} รายการ` : "เชื่อมต่อไม่สำเร็จ"}{data.stock.length && lastSync ? ` • Sync ${lastSync.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}` : ""} • รีเฟรชทุก 5 นาที</p>{captureButton("focus-stock", "focus-stock-title")}</div></header>
             {data.stock.length ? <>
               <div className="focus-model-summary focus-stock-summary">{focusStockMonitor.rows.map((row) => <article key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}><span>{row.label}</span><strong>{integer.format(row.balance)} เครื่อง</strong><small>มูลค่า ฿{integer.format(row.amount)} • มี Stock {row.activeShops}/{focusStockMonitor.shopCount} สาขา</small><small>{row.daysCover == null ? "Days Cover — (ยังไม่มียอดขาย MTD)" : `Days Cover ${number.format(row.daysCover)} วัน`}</small></article>)}</div>
               <div className="focus-model-table-wrap"><table className="focus-model-table focus-model-shop-table focus-stock-table">
-                <colgroup><col className="focus-shop-name-column" /><col span={8} className="focus-shop-value-column" /></colgroup>
+                <colgroup><col className="focus-shop-name-column" /><col span={focusStockMonitor.rows.length + 1} className="focus-shop-value-column" /></colgroup>
                 <thead><tr><th>Shop</th>{focusStockMonitor.rows.map((row) => <th key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.label}<small>{row.brand}</small></th>)}<th>Total Stock</th></tr></thead>
                 <tbody>{focusStockMonitor.shopRows.map((row) => <tr key={row.code}><th><strong>{row.shop}</strong><small>{row.code}{row.total.balance === 0 ? " · Stock Out" : ""}</small></th>{focusStockMonitor.rows.map((model) => { const value = row.values[model.key]; return <td className={value.balance === 0 ? "stock-zero" : ""} key={model.key}><strong>{integer.format(value.balance)}</strong><small>฿{integer.format(value.amount)}</small></td>; })}<td className={`focus-daily-total ${row.total.balance === 0 ? "stock-zero" : ""}`}><strong>{integer.format(row.total.balance)}</strong><small>฿{integer.format(row.total.amount)}</small></td></tr>)}</tbody>
                 <tfoot><tr><th>Grand Total</th>{focusStockMonitor.rows.map((row) => <td key={row.key}><strong>{integer.format(row.balance)}</strong><small>฿{integer.format(row.amount)}</small></td>)}<td><strong>{integer.format(focusStockMonitor.total.balance)}</strong><small>฿{integer.format(focusStockMonitor.total.amount)}</small></td></tr></tfoot>
