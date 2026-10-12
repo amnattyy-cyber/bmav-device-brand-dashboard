@@ -8,7 +8,14 @@ const javascript = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(javascript).toString("base64")}`;
-const { clampModelSalesDateRange, modelSaleKey, modelShopInsight, parseCsv, parseModelSalesTable, summarizeModelSales, topModelsByBrand } = await import(moduleUrl);
+const { clampModelSalesDateRange, hasComparedWeekSales, modelSaleKey, modelShopInsight, parseCsv, parseModelSalesTable, summarizeModelSales, topModelsByBrand } = await import(moduleUrl);
+
+test("keeps only models with sales in at least one compared week", () => {
+  assert.equal(hasComparedWeekSales({ qty: 0, net: 0 }, { qty: 0, net: 0 }), false);
+  assert.equal(hasComparedWeekSales({ qty: 1, net: 0 }, { qty: 0, net: 0 }), true);
+  assert.equal(hasComparedWeekSales({ qty: 0, net: 0 }, { qty: 2, net: 10000 }), true);
+  assert.equal(hasComparedWeekSales({ qty: 0, net: 5000 }, { qty: 0, net: 0 }), true);
+});
 
 test("keeps the model date range valid and inside the available data", () => {
   assert.deepEqual(clampModelSalesDateRange("2026-08-20", "2026-08-18", "2026-08-01", "2026-08-31"), {
