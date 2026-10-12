@@ -21,6 +21,15 @@ export type ModelSalesDateRange = {
   end: string;
 };
 
+type ComparedWeekSales = {
+  qty: number;
+  net: number;
+};
+
+export function hasComparedWeekSales(current: ComparedWeekSales, previous: ComparedWeekSales): boolean {
+  return current.qty !== 0 || current.net !== 0 || previous.qty !== 0 || previous.net !== 0;
+}
+
 export function clampModelSalesDateRange(start: string, end: string, min: string, max: string): ModelSalesDateRange {
   const safeMin = min <= max ? min : max;
   const safeMax = max >= safeMin ? max : safeMin;

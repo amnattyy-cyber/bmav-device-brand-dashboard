@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { analyzeBrandExecutive, type ExecutiveBrandRow, type ExecutiveShopRow } from "./brand-executive-insights";
 import { dashboardForMonth, dashboardMonths, fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DailySale, type DataRow } from "./google-sheet-data";
 import { focusPeriod, selectedDayFromDate, type FocusView } from "./focus-period";
-import { clampModelSalesDateRange, modelSaleKey, modelShopInsight, summarizeModelSales } from "./model-sales";
+import { clampModelSalesDateRange, hasComparedWeekSales, modelSaleKey, modelShopInsight, summarizeModelSales } from "./model-sales";
 import { focusModels, focusSalesKey, focusStockKey } from "./stock-data";
 import { comparableWeekPeriod, previousWeekId, shortDateRange, weekDataStatus, weekIndexForDate, weekRanges, wowChangeRate } from "./wow-periods";
 
@@ -635,6 +635,11 @@ export default function Home() {
     return { min: `${monthPrefix}-01`, max: data.latest };
   }, [data.latest, monthPrefix]);
 
+  const modelOverviewRows = useMemo(
+    () => modelPerformance.rows.filter((row) => hasComparedWeekSales(row.current, row.previous)),
+    [modelPerformance.rows],
+  );
+
   useEffect(() => {
     const priorLatest = previousModelSalesLatestDate.current;
     setModelSalesRange((current) => {
@@ -1211,10 +1216,10 @@ export default function Home() {
           </section>
 
           <section className={`model-area-card ${modelTableCapture === "overview" ? "model-capture-target" : ""}`} aria-labelledby="model-area-overview-title">
-            <header><div><span>BY AREA · SELECTED MODELS</span><h3 id="model-area-overview-title">ภาพรวม Performance รายรุ่น</h3></div><div className="model-card-actions"><p>{modelPerformance.rows.length} รุ่น • ตัวกรองด้านบนใช้กับทุกตาราง</p>{captureButton("overview", "model-area-overview-title")}</div></header>
+            <header><div><span>BY AREA · SELECTED MODELS</span><h3 id="model-area-overview-title">ภาพรวม Performance รายรุ่น</h3></div><div className="model-card-actions"><p>{modelOverviewRows.length} รุ่นที่มียอดใน 2 Week • ตัวกรองด้านบนใช้กับทุกตาราง</p>{captureButton("overview", "model-area-overview-title")}</div></header>
             <div className="model-performance-table-wrap"><table className="model-performance-table">
               <thead><tr><th>Brand</th><th>Model</th><th>Daily<br />QTY</th><th>Daily<br />Net</th><th>{modelPerformance.previousWeek}<br />QTY</th><th>{modelPerformance.range.id}<br />QTY</th><th>%WoW<br />QTY</th><th>{modelPerformance.previousWeek}<br />Net</th><th>{modelPerformance.range.id}<br />Net</th><th>%WoW<br />Net</th><th>MTD<br />QTY</th><th>MTD<br />Net</th></tr></thead>
-              <tbody>{modelPerformance.rows.map((row) => <tr className={selectedModelKeys.includes(row.key) ? "active" : ""} key={row.key} onClick={() => setSelectedModelKeys([row.key])}><td><span className="model-brand-pill" style={{ "--pill": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.brand}</span></td><th><strong>{row.model}</strong><small>{row.activeShops} สาขามียอด MTD</small></th><td>{integer.format(row.daily.qty)}</td><td>{integer.format(row.daily.net)}</td><td>{integer.format(row.previous.qty)}</td><td><b>{integer.format(row.current.qty)}</b></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span></td><td>{integer.format(row.previous.net)}</td><td><b>{integer.format(row.current.net)}</b></td><td><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></td><td>{integer.format(row.mtd.qty)}</td><td><b>{integer.format(row.mtd.net)}</b></td></tr>)}</tbody>
+              <tbody>{modelOverviewRows.length ? modelOverviewRows.map((row) => <tr className={selectedModelKeys.includes(row.key) ? "active" : ""} key={row.key} onClick={() => setSelectedModelKeys([row.key])}><td><span className="model-brand-pill" style={{ "--pill": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}>{row.brand}</span></td><th><strong>{row.model}</strong><small>{row.activeShops} สาขามียอด MTD</small></th><td>{integer.format(row.daily.qty)}</td><td>{integer.format(row.daily.net)}</td><td>{integer.format(row.previous.qty)}</td><td><b>{integer.format(row.current.qty)}</b></td><td><span className={`model-rate ${comparisonTone(row.wowQty)}`}>{wowRateLabel(row.wowQty)}</span></td><td>{integer.format(row.previous.net)}</td><td><b>{integer.format(row.current.net)}</b></td><td><span className={`model-rate ${comparisonTone(row.wowNet)}`}>{wowRateLabel(row.wowNet)}</span></td><td>{integer.format(row.mtd.qty)}</td><td><b>{integer.format(row.mtd.net)}</b></td></tr>) : <tr><td colSpan={12}>ไม่พบรุ่นที่มียอดขายใน Week ที่เปรียบเทียบ</td></tr>}</tbody>
             </table></div>
           </section>
 
