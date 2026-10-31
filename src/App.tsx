@@ -980,22 +980,6 @@ export default function Home() {
         {data.hasMonthSales === false && <p>ยังไม่มีข้อมูลยอดขายเดือนนี้ แสดงเป้าสำหรับวางแผน โดยยังไม่ควรใช้ยอดศูนย์ประเมินผลงาน</p>}
       </section>}
 
-      {data.hasMonthSales === false && <section className="section shell target-planning" aria-label="ตารางเป้าเต็มเดือน">
-        <h2>Target Device · {data.month}</h2>
-        <p>{selectedBrand === "ALL" ? "ทุก Brand" : selectedBrand} · {shopName} · ใช้เป้าเต็มเดือนระหว่างรอข้อมูลขาย</p>
-        <div className="shop-table-wrap"><table><thead><tr><th>สาขา</th><th>Target QTY</th><th>Target Net Amount (฿)</th></tr></thead><tbody>
-          {shopViews.map((row) => <tr key={row.code}><td className="shop-name">{row.shop}</td><td>{targetNumber.format(row.targetQty)}</td><td>{targetNumber.format(row.targetNet)}</td></tr>)}
-        </tbody><tfoot><tr><th>รวม</th><td>{targetNumber.format(scopeRow.targetQty)}</td><td>{targetNumber.format(scopeRow.targetNet)}</td></tr></tfoot></table></div>
-        <h2>Target Device by Brand · {data.month}</h2>
-        <div className="shop-table-wrap"><table><thead><tr><th>Brand</th><th>Target QTY</th><th>Target Net Amount (฿)</th></tr></thead><tbody>
-          {data.brands.filter((row) => selectedBrand === "ALL" || row.brand === selectedBrand).map(({brand}) => {
-            const row = combineRows(data.shops.filter((item) => item.brand === brand && (selectedShops.length === 0 || selectedShops.includes(item.code))));
-            return <tr key={brand}><th style={{color:brandColors[brand]}}>{brand}</th><td>{targetNumber.format(row.targetQty)}</td><td>{targetNumber.format(row.targetNet)}</td></tr>;
-          })}
-        </tbody><tfoot><tr><th>รวม</th><td>{targetNumber.format(scopeRow.targetQty)}</td><td>{targetNumber.format(scopeRow.targetNet)}</td></tr></tfoot></table></div>
-      </section>}
-
-      {data.hasMonthSales !== false && <>
       <section className={`section executive-overview-section shell ${modelTableCapture === "executive-overview" ? "model-capture-target" : ""}`} aria-labelledby="executive-overview-title">
         <header className="executive-overview-heading">
           <div><span className="section-number">EXECUTIVE</span><h2 id="executive-overview-title">BMAV Brand Executive Overview</h2><p>ภาพรวมทุก Brand • {metricLabel} • {modeCopy.title} ณ {thaiDate(selectedDay)} • {shopName} • Insight สร้างอัตโนมัติตามตัวกรอง</p></div>
@@ -1336,7 +1320,6 @@ export default function Home() {
         </tbody></table></div>
       </section>
 
-      </>}
       <footer className="shell"><div><strong>BMAV</strong><span>Device by Brand Dashboard</span></div><p><span className={`source-badge ${sourceStatus}`}>{sourceStatus === "live" ? "LIVE · Google Sheet" : sourceStatus === "loading" ? "กำลังอัปเดต" : "ข้อมูลสำรอง"}</span> {data.hasMonthSales === false ? `ยังไม่มีข้อมูลขาย ${data.month}` : `Last updated ${thaiDate(latestDay)}`}{lastSync ? ` · Sync ${lastSync.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}` : ""}</p></footer>
     </main>
   );
