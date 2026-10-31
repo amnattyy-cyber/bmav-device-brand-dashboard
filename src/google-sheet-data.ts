@@ -1,5 +1,6 @@
 import fallbackJson from "./dashboard-data.json";
 import octoberTargets from "./october-targets.json";
+import novemberTargets from "./november-targets.json";
 import { parseCsv, parseModelSalesTable, type ModelSale } from "./model-sales";
 import { focusModels, parseStockTable, type StockRow } from "./stock-data";
 
@@ -83,6 +84,9 @@ const SHEET_GIDS: Record<string, string> = {
 };
 
 export const sheetRefreshInterval = REFRESH_INTERVAL_MS;
+
+const targetSnapshots = [octoberTargets, novemberTargets];
+const targetSnapshotForMonth = (monthPrefix: string) => targetSnapshots.find((snapshot) => snapshot.month === monthPrefix);
 
 type GvizCell = { v?: string | number | null; f?: string | null } | null;
 type GvizResponse = {
@@ -248,7 +252,7 @@ function previousMonthPrefix(monthPrefix: string) {
 }
 
 export function dashboardMonths(source: DashboardData) {
-  return [...new Set([octoberTargets.month, ...[...source.sales, ...source.modelSales].map((row) => row.date.slice(0, 7)).filter(Boolean)])]
+  return [...new Set([...targetSnapshots.map((snapshot) => snapshot.month), ...[...source.sales, ...source.modelSales].map((row) => row.date.slice(0, 7)).filter(Boolean)])]
     .sort((a, b) => b.localeCompare(a));
 }
 
@@ -262,8 +266,9 @@ export function dashboardForMonth(source: DashboardData, monthPrefix: string): D
   const latest = availableDates.at(-1) ?? `${monthPrefix}-01`;
   const sourceMonth = source.latest.slice(0, 7);
   const fallbackMonth = fallbackData.latest.slice(0, 7);
-  const targetSource = monthPrefix === octoberTargets.month
-    ? octoberTargets.brands
+  const targetSnapshot = targetSnapshotForMonth(monthPrefix);
+  const targetSource = targetSnapshot
+    ? targetSnapshot.brands
     : monthPrefix === sourceMonth
     ? source.shops
     : monthPrefix === fallbackMonth
@@ -312,8 +317,8 @@ export function dashboardForMonth(source: DashboardData, monthPrefix: string): D
     ...source,
     month: monthName,
     latest,
-    deviceTargets: monthPrefix === octoberTargets.month ? octoberTargets.device : undefined,
-    targetSource: monthPrefix === octoberTargets.month ? octoberTargets.source : undefined,
+    deviceTargets: targetSnapshot?.device,
+    targetSource: targetSnapshot?.source,
     hasMonthSales: availableDates.length > 0,
     totals: combineRows(shops, days),
     brands,

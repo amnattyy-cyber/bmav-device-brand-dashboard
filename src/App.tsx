@@ -26,7 +26,7 @@ type ViewMetrics = {
 const brandColors: Record<string, string> = {
   IPHONE: "#7c3aed", SAMSUNG: "#2563eb", IPAD: "#8b5cf6", VIVO: "#06b6d4",
   OPPO: "#16a34a", XIAOMI: "#f97316", HUAWEI: "#e11d48", HONOR: "#0891b2",
-  INFINIX: "#65a30d", NOTHING: "#111827", REALME: "#eab308", ALLDOCUBE: "#64748b",
+  INFINIX: "#65a30d", NOTHING: "#111827", REALME: "#eab308", ALLDOCUBE: "#64748b", TECNO: "#00a9ce",
 };
 
 const number = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 1 });

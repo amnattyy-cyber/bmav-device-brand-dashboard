@@ -1,6 +1,6 @@
 # BMAV Device by Brand Dashboard
 
-Public interactive dashboard for BMA V - Central device performance, with monthly selection including October 2026.
+Public interactive dashboard for BMA V - Central device performance, with monthly selection including October and November 2026.
 
 ## Features
 
@@ -37,6 +37,13 @@ The active period is compared on an equal-day basis with the immediately precedi
 - ALL-brand KPIs, Shop Performance and the ALL column in Brand × Shop use Device targets; brand columns use the corresponding Brand targets. Source totals also reconcile per shop. No target scaling or redistribution is applied.
 - Sales, model sales, stock, JSONP, LIVE status, latest-sales default and the five-minute refresh remain connected to the existing feeds. The workbook target snapshot is versioned in this repository; the Google Sheet itself is unchanged.
 - Existing calendar weeks cover October (Week 40–44), including the September/October boundary. Changing Month resets the selected week to that month's latest available date.
+
+## November 2026 targets
+
+- `src/november-targets.json` contains the November targets from `202611_Target by Brand Nov'26 V.1 B5.xlsx`, filtered to `BMA V - Central` and aggregated by Shop Code and Brand.
+- Device totals and the 124 shop/brand target rows reconcile to **4,032.5318500924654 QTY** and **99,956,261.94069129 Net Amount**, across 15 shops and 12 brands. Fractional targets are preserved without rounding during calculation.
+- November is selectable independently of the latest sales month. The snapshot supplies Device and Brand targets while sales, model sales, stock, MoM and WoW continue to use the live feeds.
+- Existing calendar weeks cover November (Week 44–49), including the October/November and November/December boundaries.
 
 ## GitHub Pages publishing
 

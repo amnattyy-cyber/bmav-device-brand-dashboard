@@ -65,7 +65,10 @@ test("October target snapshot never leaks into another month", () => {
   const august = dashboardForMonth(fallbackData, fallbackData.latest.slice(0, 7));
   close(august.totals.targetNet, fallbackData.shops.reduce((s,row) => s+row.targetNet,0));
   assert.equal(august.deviceTargets, undefined);
-  assert.equal(dashboardForMonth(fallbackData, "2026-11").totals.targetNet, 0);
+  const november = dashboardForMonth(fallbackData, "2026-11");
+  close(november.totals.targetNet, 99956261.94069129);
+  assert.notEqual(november.targetSource, targets.source);
+  assert.equal(dashboardForMonth(fallbackData, "2026-12").totals.targetNet, 0);
 });
 
 test("October weeks and September boundary keep equal-day comparisons", () => {
