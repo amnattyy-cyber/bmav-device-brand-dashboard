@@ -50,6 +50,15 @@ test("November can be selected before sales arrive", () => {
   assert.equal(sheetRefreshInterval, 300000);
 });
 
+test("November keeps the same dashboard board pattern while sales are pending", async () => {
+  const app = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(app, /hasMonthSales !== false && <>/);
+  assert.doesNotMatch(app, /target-planning/);
+  assert.match(app, /BMAV Brand Executive Overview/);
+  assert.match(app, /Performance by Brand/);
+  assert.match(app, /Shop Performance/);
+});
+
 test("November targets override feed targets and preserve October comparison sales", () => {
   const novemberSale = { date: "2026-11-01", code: "80100478", shop: "True Shop Terminal 21", brand: "TECNO", qty: 2, net: 5000 };
   const octoberSale = { ...novemberSale, date: "2026-10-01", qty: 1, net: 2400 };

@@ -346,6 +346,3 @@ footer { margin-top: 85px; border-top: 1px solid var(--line); min-height: 120px;
 .target-month-summary strong, .target-month-summary > b { font-size: 18px; }
 .target-month-summary span, .target-month-summary p { font-size: 15px; }
 .target-month-summary p { width: 100%; margin: 0; }
-.target-planning h2:not(:first-child) { margin-top: 32px; }
-.target-planning table { min-width: 600px; }
-.target-planning tfoot { background: #f5f3ff; font-weight: 700; }
