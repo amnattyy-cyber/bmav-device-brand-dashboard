@@ -92,3 +92,18 @@ test("November weeks include both month boundaries", () => {
   assert.equal(period.currentDays, 7);
   assert.equal(period.baseEnd, "2026-10-25");
 });
+
+test("August through November keep independent targets and sales", () => {
+  const months = ["2026-08", "2026-09", "2026-10", "2026-11"];
+  const expectedNet = [50953089, 94539439, 139215088.76, 99956261.94069129];
+  const sales = months.map((month, i) => ({ date: `${month}-03`, code: "80100478", shop: "True Shop Terminal 21", brand: "IPHONE", qty: i + 1, net: (i + 1) * 10000 }));
+  const source = { ...fallbackData, latest: "2026-11-03", sales, modelSales: [] };
+  months.forEach((month, i) => {
+    assert.ok(dashboardMonths(source).includes(month));
+    const result = dashboardForMonth(source, month);
+    close(result.totals.targetNet, expectedNet[i]);
+    assert.equal(result.totals.dailyQty.reduce((a, b) => a + b, 0), i + 1);
+    assert.equal(result.latest, `${month}-03`);
+    if (i) assert.equal(result.totals.previousDailyQty[2], i);
+  });
+});

@@ -64,7 +64,8 @@ test("October targets win over undated feed targets, while sales-only brands sur
 test("October target snapshot never leaks into another month", () => {
   const august = dashboardForMonth(fallbackData, fallbackData.latest.slice(0, 7));
   close(august.totals.targetNet, fallbackData.shops.reduce((s,row) => s+row.targetNet,0));
-  assert.equal(august.deviceTargets, undefined);
+  assert.equal(august.deviceTargets.length, 15);
+  assert.notEqual(august.targetSource, targets.source);
   const november = dashboardForMonth(fallbackData, "2026-11");
   close(november.totals.targetNet, 99956261.94069129);
   assert.notEqual(november.targetSource, targets.source);

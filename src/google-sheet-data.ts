@@ -1,3 +1,5 @@
+import augustTargets from "./august-targets.json";
+import septemberTargets from "./september-targets.json";
 import fallbackJson from "./dashboard-data.json";
 import octoberTargets from "./october-targets.json";
 import novemberTargets from "./november-targets.json";
@@ -85,7 +87,7 @@ const SHEET_GIDS: Record<string, string> = {
 
 export const sheetRefreshInterval = REFRESH_INTERVAL_MS;
 
-const targetSnapshots = [octoberTargets, novemberTargets];
+const targetSnapshots = [augustTargets, septemberTargets, octoberTargets, novemberTargets];
 const targetSnapshotForMonth = (monthPrefix: string) => targetSnapshots.find((snapshot) => snapshot.month === monthPrefix);
 
 type GvizCell = { v?: string | number | null; f?: string | null } | null;

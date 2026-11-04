@@ -172,7 +172,7 @@ export default function Home() {
   useEffect(() => {
     const priorLatestDate = previousLatestDate.current;
     const priorLatestDay = Number(priorLatestDate.slice(-2));
-    setSelectedDay((current) => current === priorLatestDay ? latestDay : Math.min(current, latestDay));
+    setSelectedDay((current) => priorLatestDate.slice(0, 7) !== data.latest.slice(0, 7) || current === priorLatestDay ? latestDay : Math.min(current, latestDay));
     setSelectedWeek((current) => priorLatestDate.slice(0, 7) !== data.latest.slice(0, 7) || current === weekIndexForDate(priorLatestDate) ? weekIndexForDate(data.latest) : current);
     previousLatestDate.current = data.latest;
   }, [data.latest, latestDay]);
@@ -961,6 +961,15 @@ export default function Home() {
           <div className="as-of">{data.hasMonthSales === false ? "รอยอดขายเดือนนี้" : `ข้อมูล ณ ${thaiDate(selectedDay)}`}</div>
         </div>
       </section>
+
+      <nav className="month-tabs shell" aria-label="เลือกเดือน Dashboard">
+        <span className="month-tabs-label">PERFORMANCE · 2026</span>
+        <div className="month-tabs-buttons">
+          {["2026-08", "2026-09", "2026-10", "2026-11"].map((month) => <button key={month} type="button" aria-pressed={selectedMonth === month} className={selectedMonth === month ? "active" : ""} onClick={() => { setSelectedMonth(month); setSelectedBrand("ALL"); setSelectedShops([]); }}>
+            {new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" }).format(new Date(`${month}-01T00:00:00Z`))}<small>2026</small>
+          </button>)}
+        </div>
+      </nav>
 
       <section className="filter-dock shell" aria-label="ตัวกรอง Dashboard">
         <div className="filter-group metric-filter"><span className="filter-label">มุมมองหลัก</span><div className="segmented"><button className={metric === "net" ? "selected" : ""} onClick={() => setMetric("net")}>Net Amount</button><button className={metric === "qty" ? "selected" : ""} onClick={() => setMetric("qty")}>Qty</button></div></div>
