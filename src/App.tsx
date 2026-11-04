@@ -365,7 +365,7 @@ export default function Home() {
     data.sales.forEach((row) => shopsByCode.set(String(row.code), row.shop || shopsByCode.get(String(row.code)) || String(row.code)));
     const visibleShops = [...shopsByCode.entries()].filter(([code]) => selectedShops.length === 0 || selectedShops.includes(code));
 
-    const brandRows: ExecutiveBrandRow[] = brandNames.map((brand) => {
+    const brandRows: (ExecutiveBrandRow & { previous: number })[] = brandNames.map((brand) => {
       const rows = data.shops.filter((row) => row.brand === brand && (selectedShops.length === 0 || selectedShops.includes(String(row.code))));
       const view = getViewMetrics(combineRows(rows));
       const activeShops = visibleShops.filter(([code]) => {
@@ -377,6 +377,7 @@ export default function Home() {
         target: view.target,
         actual: view.actual,
         achievement: view.monthlyTarget > 0 ? view.achievement : null,
+        previous: view.previous,
         wow: brandWow.get(brand)?.rate ?? null,
         activeShops,
         totalShops: visibleShops.length,
@@ -402,7 +403,7 @@ export default function Home() {
       };
     });
 
-    const totals = brandRows.reduce((sum, row) => ({ target: sum.target + row.target, actual: sum.actual + row.actual }), { target: 0, actual: 0 });
+    const totals = brandRows.reduce((sum, row) => ({ target: sum.target + row.target, actual: sum.actual + row.actual, previous: sum.previous + row.previous }), { target: 0, actual: 0, previous: 0 });
     return { rows: brandRows, shopRows, totals, analysis: analyzeBrandExecutive(brandRows, shopRows) };
   }, [brandWow, data.brands, data.sales, data.shops, getViewMetrics, selectedShops]);
 
@@ -1003,17 +1004,18 @@ export default function Home() {
         <div className="executive-overview-layout">
           <div className="executive-brand-table-wrap">
             <table className="executive-brand-table">
-              <thead><tr><th>Brand</th><th>{modeCopy.target}</th><th>{modeCopy.actual}</th><th>%Ach</th><th>Gap</th><th>WoW {metric === "net" ? "Net" : "Qty"}</th><th>Active Shop</th></tr></thead>
+              <thead><tr><th>Brand</th><th>{modeCopy.target}</th><th>{modeCopy.actual}</th><th>%Ach</th><th>Gap</th><th title={`เทียบ ${previousMonthName} ตามช่วงวันที่และมุมมองที่เลือก`}>MoM</th><th>WoW {metric === "net" ? "Net" : "Qty"}</th><th>Active Shop</th></tr></thead>
               <tbody>{executiveOverview.rows.map((row) => <tr key={row.brand}>
                 <th><i style={{ background: brandColors[row.brand] ?? "#64748b" }} /><strong>{row.brand}</strong></th>
                 <td>{row.hasTarget ? tableValue(row.target) : <span className="executive-no-target">No Target</span>}</td>
                 <td><b>{tableValue(row.actual)}</b></td>
                 <td><span className={`executive-achievement ${row.achievement == null ? "flat" : comparisonTone(row.achievement - 100)}`}>{row.achievement == null ? "—" : `${row.achievement.toFixed(1)}%`}</span></td>
                 <td className={row.hasTarget ? comparisonTone(row.actual - row.target) : "flat"}>{row.hasTarget ? signedInteger(row.actual - row.target) : "—"}</td>
+                <td><span className={`mom-value ${momTone(row.actual, row.previous)}`}>{momLabel(row.actual, row.previous)}</span></td>
                 <td><span className={`all-brand-wow-rate ${comparisonTone(row.wow)}`}>{wowRateLabel(row.wow)}</span></td>
                 <td>{row.activeShops}/{row.totalShops}</td>
               </tr>)}</tbody>
-              <tfoot><tr><th>BMAV Total</th><td>{tableValue(executiveOverview.totals.target)}</td><td>{tableValue(executiveOverview.totals.actual)}</td><td>{executiveOverview.totals.target > 0 ? `${((executiveOverview.totals.actual / executiveOverview.totals.target) * 100).toFixed(1)}%` : "—"}</td><td className={comparisonTone(executiveOverview.totals.actual - executiveOverview.totals.target)}>{signedInteger(executiveOverview.totals.actual - executiveOverview.totals.target)}</td><td>{wowRateLabel(metric === "net" ? allBrandWow.totals.netRate : allBrandWow.totals.qtyRate)}</td><td>{executiveOverview.shopRows.length} Shop</td></tr></tfoot>
+              <tfoot><tr><th>BMAV Total</th><td>{tableValue(executiveOverview.totals.target)}</td><td>{tableValue(executiveOverview.totals.actual)}</td><td>{executiveOverview.totals.target > 0 ? `${((executiveOverview.totals.actual / executiveOverview.totals.target) * 100).toFixed(1)}%` : "—"}</td><td className={comparisonTone(executiveOverview.totals.actual - executiveOverview.totals.target)}>{signedInteger(executiveOverview.totals.actual - executiveOverview.totals.target)}</td><td><span className={`mom-value ${momTone(executiveOverview.totals.actual, executiveOverview.totals.previous)}`}>{momLabel(executiveOverview.totals.actual, executiveOverview.totals.previous)}</span></td><td>{wowRateLabel(metric === "net" ? allBrandWow.totals.netRate : allBrandWow.totals.qtyRate)}</td><td>{executiveOverview.shopRows.length} Shop</td></tr></tfoot>
             </table>
           </div>
           <div className="executive-insight-column">

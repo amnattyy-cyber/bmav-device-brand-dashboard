@@ -357,3 +357,12 @@ footer { margin-top: 85px; border-top: 1px solid var(--line); min-height: 120px;
 @media (max-width: 640px) { .month-tabs { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px; } .month-tabs-buttons { grid-template-columns: repeat(4, 1fr); } .month-tabs-buttons button { padding: 10px 4px; font-size: 16px; } .month-tabs-buttons button small { display: block; margin: 3px 0 0; } }
 
 .month-tabs + .filter-dock { margin-top: 0; }
+
+/* Keep the executive board readable with the MoM comparison column. */
+.executive-brand-table thead th:first-child { width: 15%; }
+.executive-brand-table thead th:nth-child(2), .executive-brand-table thead th:nth-child(3) { width: 16%; }
+.executive-brand-table thead th:nth-child(4) { width: 9%; }
+.executive-brand-table thead th:nth-child(5) { width: 13%; }
+.executive-brand-table thead th:nth-child(6), .executive-brand-table thead th:nth-child(7) { width: 10%; }
+.executive-brand-table thead th:nth-child(8) { width: 11%; }
+.executive-brand-table .mom-value { min-width: 42px; padding: 3px 4px; font-size: 8.5px; }
