@@ -107,3 +107,13 @@ test("August through November keep independent targets and sales", () => {
     if (i) assert.equal(result.totals.previousDailyQty[2], i);
   });
 });
+
+ test("MoM preserves a prior-month-only brand in the comparison total", () => {
+  const source = { ...fallbackData, modelSales: [], sales: [
+    {date:"2026-09-30",code:"prior-only",shop:"Prior shop",brand:"PRIOR",qty:2,net:200},
+    {date:"2026-10-31",code:"80100478",shop:"Terminal 21",brand:"IPHONE",qty:3,net:300}
+  ]};
+  const october = dashboardForMonth(source,"2026-10");
+  assert.equal(october.totals.previousDailyNet.reduce((a,b)=>a+b,0),200);
+  assert.equal(october.totals.dailyNet.reduce((a,b)=>a+b,0),300);
+});

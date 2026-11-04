@@ -282,6 +282,12 @@ export function dashboardForMonth(source: DashboardData, monthPrefix: string): D
   targetSource.forEach((row) => seeds.set(`${row.code}|${row.brand}`, { code: row.code, shop: row.shop, brand: row.brand }));
   monthSales.forEach((sale) => seeds.set(`${sale.code}|${sale.brand}`, { code: sale.code, shop: sale.shop || sale.code, brand: sale.brand }));
 
+  // Retain prior-month-only brand/shop pairs so MoM includes the full comparison base.
+  source.sales.filter((sale) => sale.date.startsWith(previousPrefix)).forEach((sale) => {
+    const key = `${sale.code}|${sale.brand}`;
+    if (!seeds.has(key)) seeds.set(key, { code: sale.code, shop: sale.shop || sale.code, brand: sale.brand });
+  });
+
   const shops: ShopRow[] = [...seeds.values()].map((seed) => {
     const target = targetByKey.get(`${seed.code}|${seed.brand}`);
     const row: ShopRow = {
