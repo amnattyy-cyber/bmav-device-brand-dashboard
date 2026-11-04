@@ -328,12 +328,12 @@ export function dashboardForMonth(source: DashboardData, monthPrefix: string): D
   };
 }
 
-async function fetchModelSheet(): Promise<string[][]> {
+export async function fetchCsvSheet(sheetName: "Daily_Sales" | "Daily_Sales_Model"): Promise<string[][]> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 60_000);
   const query = new URLSearchParams({
     format: "csv",
-    gid: SHEET_GIDS.Daily_Sales_Model,
+    gid: SHEET_GIDS[sheetName],
     _: String(Date.now()),
   });
   try {
@@ -341,9 +341,9 @@ async function fetchModelSheet(): Promise<string[][]> {
       cache: "no-store",
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`Google Sheet Daily_Sales_Model returned ${response.status}`);
+    if (!response.ok) throw new Error(`Google Sheet ${sheetName} returned ${response.status}`);
     const rows = parseCsv(await response.text());
-    if (rows.length < 2) throw new Error("Google Sheet Daily_Sales_Model has no data rows");
+    if (rows.length < 2) throw new Error(`Google Sheet ${sheetName} has no data rows`);
     return rows;
   } finally {
     window.clearTimeout(timeout);
@@ -351,7 +351,11 @@ async function fetchModelSheet(): Promise<string[][]> {
 }
 
 async function fetchSheet(sheetName: string): Promise<string[][]> {
-  return sheetName === "Daily_Sales_Model" ? fetchModelSheet() : fetchSheetPage(sheetName);
+  // GViz respects the active sheet filter and can omit historical sales.
+  // CSV export returns the full underlying table, including filtered-out months.
+  return sheetName === "Daily_Sales" || sheetName === "Daily_Sales_Model"
+    ? fetchCsvSheet(sheetName)
+    : fetchSheetPage(sheetName);
 }
 
 export async function loadGoogleSheetData(): Promise<DashboardData> {
