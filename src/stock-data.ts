@@ -10,7 +10,6 @@ export type StockRow = {
 };
 
 export const focusModels = [
-  { key: "samsung-a06-5g-4-64", label: "Samsung A06 5G 4/64GB", brand: "SAMSUNG", salesNames: ["GALAXY A06 5G 4/64GB"], stockPrefixes: ["H/S,SS,GALAXY A06,5G,4/64GB"] },
   { key: "vivo-y05-4-64", label: "vivo Y05 4/64GB", brand: "VIVO", salesNames: ["VIVO Y05 4G 4/64GB"], stockPrefixes: ["H/S,VIVO,Y05,4G,4/64"] },
   { key: "xiaomi-redmi-a7-pro-4-128", label: "Xiaomi Redmi A7 Pro 4/128GB", brand: "XIAOMI", salesNames: ["REDMI A7 PRO 4G 4/128GB"], stockPrefixes: ["H/S,XIAOMI,REDMI A7 PRO,4G,4/128GB"] },
   { key: "honor-x5c-plus-4-128", label: "Honor X5c Plus 4/128GB", brand: "HONOR", salesNames: ["HONOR X5C PLUS 4G 4/128GB"], stockPrefixes: ["H/S,HONOR,X5C PLUS,4G,4/128GB"] },
@@ -22,7 +21,6 @@ export const focusModels = [
   { key: "samsung-a07s-4-64", label: "Samsung A07s 4/64GB", brand: "SAMSUNG", salesNames: ["GALAXY A07S 4G 4/64GB"], stockPrefixes: ["H/S,SS,GALAXY A07S,4G,4/64GB"] },
   { key: "infinix-smart20-4-128", label: "Infinix Smart 20 4/128GB", brand: "INFINIX", salesNames: ["INFINIX SMART 20 4G 4/128GB"], stockPrefixes: ["H/S,INFINIX,SMART 20,4G,4/128GB"] },
   { key: "xiaomi-redmi-a7-pro-4-64", label: "Xiaomi Redmi A7 Pro 4/64GB", brand: "XIAOMI", salesNames: ["REDMI A7 PRO 4G 4/64GB"], stockPrefixes: ["H/S,XIAOMI,REDMI A7 PRO,4G,4/64GB"] },
-  { key: "realme-c100i-4-128", label: "Realme C100i 4/128GB", brand: "REALME", salesNames: ["REALME C100I 4G 4/128GB"], stockPrefixes: ["H/S,REALME,C100I,4G,4/128GB"] },
   { key: "samsung-a08-4-64", label: "Samsung A08 4/64GB", brand: "SAMSUNG", salesNames: ["GALAXY A08 4G 4/64GB"], stockPrefixes: ["H/S,SS,GALAXY A08,4G,4/64GB"] },
   { key: "realme-note80-4-64", label: "Realme Note 80 4/64GB", brand: "REALME", salesNames: ["REALME NOTE 80 4G 4/64GB"], stockPrefixes: ["H/S,REALME NOTE 80,4G,4/64"] },
 ] as const;
