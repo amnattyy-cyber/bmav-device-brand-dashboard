@@ -5,7 +5,7 @@ import { analyzeBrandExecutive, type ExecutiveBrandRow, type ExecutiveShopRow } 
 import { dashboardForMonth, dashboardMonths, fallbackData, loadGoogleSheetData, sheetRefreshInterval, type DailySale, type DataRow } from "./google-sheet-data";
 import { focusPeriod, selectedDayFromDate, type FocusView } from "./focus-period";
 import { clampModelSalesDateRange, hasComparedWeekSales, modelSaleKey, modelShopInsight, summarizeModelSales } from "./model-sales";
-import { focusModels, focusSalesKey, focusStockKey } from "./stock-data";
+import { focusModels, focusSalesKey, focusStockKey, sortFocusBySales } from "./stock-data";
 import { comparableWeekPeriod, previousWeekId, shortDateRange, weekDataStatus, weekIndexForDate, weekRanges, wowChangeRate } from "./wow-periods";
 
 type Metric = "net" | "qty";
@@ -760,7 +760,7 @@ export default function Home() {
         return { code, shop, values, total: shopTotal };
       })
       .sort((a, b) => b.total[modelSort] - a.total[modelSort] || a.shop.localeCompare(b.shop));
-    return { rows, daily, trendDaily, shopRows, total, period };
+    return { rows: sortFocusBySales(rows, modelSort), daily, trendDaily, shopRows, total, period };
   }, [data.modelSales, focusView, formatDate, modelShopOptions, modelSort, monthPrefix, selectedDay, selectedShops]);
   const focusTrendChart = useMemo(() => {
     const width = 1000;
@@ -780,19 +780,19 @@ export default function Home() {
       : left + (index / Math.max(focusModelMonitor.trendDaily.length - 1, 1)) * plotWidth;
     const y = (value: number) => top + plotHeight - (value / max) * plotHeight;
     const labelEvery = Math.max(1, Math.ceil(focusModelMonitor.trendDaily.length / 10));
-    const series = focusModels.map((model) => {
+    const series = focusModelMonitor.rows.map((model) => {
       const points = focusModelMonitor.trendDaily.map((day, index) => ({ x: x(index), y: y(day.values[model.key]?.qty ?? 0), value: day.values[model.key]?.qty ?? 0 }));
       return { ...model, color: brandColors[model.brand] ?? "#64748b", points, path: smoothLinePath(points) };
     });
     const ticks = Array.from({ length: 5 }, (_, index) => ({ value: step * index, y: y(step * index) })).reverse();
     const labels = focusModelMonitor.trendDaily.map((day, index) => ({ date: day.date, x: x(index), show: index % labelEvery === 0 || index === focusModelMonitor.trendDaily.length - 1 }));
     return { width, height, left, right, top, bottom, plotWidth, plotHeight, max, series, ticks, labels };
-  }, [focusModelMonitor.trendDaily]);
+  }, [focusModelMonitor.trendDaily, focusModelMonitor.rows]);
   const focusStockMonitor = useMemo(() => {
     const visibleShops = modelShopOptions.filter(([code]) => selectedShops.length === 0 || selectedShops.includes(code));
     const visibleCodes = new Set(visibleShops.map(([code]) => code));
     const scoped = data.stock.filter((row) => visibleCodes.has(row.code));
-    const rows = focusModels.map((definition) => {
+    const rows = focusModelMonitor.rows.map((definition) => {
       const stock = scoped.filter((row) => focusStockKey(row.productName) === definition.key);
       const sales = focusModelMonitor.rows.find((row) => row.key === definition.key)?.mtdTotal.qty ?? 0;
       const balance = stock.reduce((sum, row) => sum + row.balance, 0);
@@ -1161,7 +1161,7 @@ export default function Home() {
           </div>
 
           <section className={`focus-model-monitor-card focus-model-daily-card ${modelTableCapture === "focus-models" ? "model-capture-target" : ""}`} aria-labelledby="focus-model-monitor-title">
-            <header><div><span>MODEL FOCUS · DAILY MONITOR</span><h3 id="focus-model-monitor-title">ยอดขายรายวัน {focusModels.length} รุ่น Focus</h3><p>{data.month} • {focusPeriodLabel} • {shopName}</p></div><div className="model-card-actions focus-model-actions"><div className="focus-period-controls"><label htmlFor="focus-date-filter"><span>วันที่ Focus</span><input id="focus-date-filter" type="date" min={`${monthPrefix}-01`} max={data.latest} value={formatDate(selectedDay)} onChange={(event) => selectDashboardDate(event.target.value, true)} /></label><div className="focus-view-control" role="group" aria-label={`เลือกมุมมองยอดขาย ${focusModels.length} รุ่น Focus`}><span>มุมมอง</span><div className="segmented"><button className={focusView === "daily" ? "selected" : ""} type="button" onClick={() => setFocusView("daily")}>Daily</button><button className={focusView === "mtd" ? "selected" : ""} type="button" onClick={() => setFocusView("mtd")}>MTD</button></div></div></div>{captureButton("focus-models", "focus-model-monitor-title")}</div></header>
+            <header><div><span>MODEL FOCUS · DAILY MONITOR</span><h3 id="focus-model-monitor-title">ยอดขายรายวัน {focusModels.length} รุ่น Focus</h3><p>{data.month} • {focusPeriodLabel} • {shopName} • Samsung ก่อน ตามด้วยยอดขายรวม Brand ({modelSort === "net" ? "Net" : "QTY"})</p></div><div className="model-card-actions focus-model-actions"><div className="focus-period-controls"><label htmlFor="focus-date-filter"><span>วันที่ Focus</span><input id="focus-date-filter" type="date" min={`${monthPrefix}-01`} max={data.latest} value={formatDate(selectedDay)} onChange={(event) => selectDashboardDate(event.target.value, true)} /></label><div className="focus-view-control" role="group" aria-label={`เลือกมุมมองยอดขาย ${focusModels.length} รุ่น Focus`}><span>มุมมอง</span><div className="segmented"><button className={focusView === "daily" ? "selected" : ""} type="button" onClick={() => setFocusView("daily")}>Daily</button><button className={focusView === "mtd" ? "selected" : ""} type="button" onClick={() => setFocusView("mtd")}>MTD</button></div></div></div>{captureButton("focus-models", "focus-model-monitor-title")}</div></header>
             <div className="focus-model-summary">{focusModelMonitor.rows.map((row) => <article key={row.key} style={{ "--focus-brand": brandColors[row.brand] ?? "#64748b" } as React.CSSProperties}><span>{row.label}</span><strong>{integer.format(row.total.qty)} เครื่อง</strong><small>Net ฿{integer.format(row.total.net)} • {row.activeShops} สาขา</small></article>)}</div>
             <div className="focus-model-table-wrap"><table className="focus-model-table focus-model-daily-table">
               <colgroup><col className="focus-daily-date-column" /><col span={focusModelMonitor.rows.length + 1} className="focus-daily-value-column" /></colgroup>

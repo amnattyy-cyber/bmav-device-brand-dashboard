@@ -82,3 +82,19 @@ export function parseStockTable(table: string[][]): StockRow[] {
     amount: numeric(row[columns.amount]),
   })).filter((row) => row.code && row.shop && row.model && focusStockKey(row.productName) && row.balance > 0);
 }
+
+// Keep each brand together and share the sales order with the stock monitor.
+export function sortFocusBySales<T extends { brand: string; total: { qty: number; net: number } }>(
+  rows: readonly T[], metric: "qty" | "net",
+): T[] {
+  const totals = new Map<string, number>();
+  for (const row of rows) totals.set(row.brand, (totals.get(row.brand) ?? 0) + row.total[metric]);
+  return [...rows].sort((a, b) => {
+    if (a.brand !== b.brand) {
+      if (a.brand === "SAMSUNG") return -1;
+      if (b.brand === "SAMSUNG") return 1;
+      return (totals.get(b.brand) ?? 0) - (totals.get(a.brand) ?? 0) || a.brand.localeCompare(b.brand);
+    }
+    return b.total[metric] - a.total[metric];
+  });
+}

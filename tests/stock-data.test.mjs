@@ -8,7 +8,7 @@ const javascript = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(javascript).toString("base64")}`;
-const { focusModels, focusSalesKey, focusStockKey, parseStockTable } = await import(moduleUrl);
+const { focusModels, focusSalesKey, focusStockKey, parseStockTable, sortFocusBySales } = await import(moduleUrl);
 
 test("defines the remaining 13 exact Model Focus devices", () => {
   assert.equal(focusModels.length, 13);
@@ -81,4 +81,19 @@ test("parses Stock rows and keeps only positive Focus stock", () => {
   assert.equal(focusStockKey("H/S,TECNO,POP 20,4G,4/128GB,BLACK"), "tecno-pop20");
   assert.equal(focusStockKey("H/S,TECNO,POP 20 PRO,4G,4/128GB,BLACK"), null);
   assert.equal(focusStockKey("ACC,TECNO,POP 20,CASE"), null);
+});
+
+test("focus order pins Samsung, groups brands by sales, and responds to the metric", () => {
+  const rows = [
+    {brand:"OPPO",id:1,total:{qty:3,net:900}},
+    {brand:"VIVO",id:2,total:{qty:5,net:100}},
+    {brand:"SAMSUNG",id:3,total:{qty:0,net:0}},
+    {brand:"OPPO",id:4,total:{qty:3,net:800}},
+    {brand:"VIVO",id:5,total:{qty:2,net:100}},
+    {brand:"SAMSUNG",id:6,total:{qty:1,net:10}},
+    {brand:"TECNO",id:7,total:{qty:0,net:0}},
+  ];
+  assert.deepEqual(sortFocusBySales(rows,"qty").map(r=>r.id),[6,3,2,5,1,4,7]);
+  assert.deepEqual(sortFocusBySales(rows,"net").map(r=>r.id),[6,3,1,4,2,5,7]);
+  assert.deepEqual(rows.map(r=>r.id),[1,2,3,4,5,6,7]);
 });
