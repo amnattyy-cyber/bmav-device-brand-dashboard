@@ -24,11 +24,11 @@ const close = (a, b) => assert.ok(Math.abs(a - b) < 0.00001, `${a} != ${b}`);
 test("November workbook reconciles at area, shop, and brand level", () => {
   assert.equal(targets.month, "2026-11");
   assert.equal(targets.device.length, 15);
-  assert.equal(targets.brands.length, 124);
+  assert.equal(targets.brands.length, 134);
   assert.equal(new Set(targets.brands.map((row) => row.brand)).size, 12);
   for (const group of [targets.device, targets.brands]) {
-    close(group.reduce((sum, row) => sum + row.targetQty, 0), 4032.5318500924654);
-    close(group.reduce((sum, row) => sum + row.targetNet, 0), 99956261.94069129);
+    close(group.reduce((sum, row) => sum + row.targetQty, 0), 4110.617844238585);
+    close(group.reduce((sum, row) => sum + row.targetNet, 0), 101290261.65);
   }
   for (const shop of targets.device) {
     const brands = targets.brands.filter((row) => row.code === shop.code);
@@ -43,10 +43,10 @@ test("November can be selected before sales arrive", () => {
   assert.equal(november.hasMonthSales, false);
   assert.equal(november.month, "November 2026");
   assert.equal(november.totals.dailyNet.length, 30);
-  close(november.totals.targetNet, 99956261.94069129);
-  close(november.totals.targetQty, 4032.5318500924654);
+  close(november.totals.targetNet, 101290261.65);
+  close(november.totals.targetQty, 4110.617844238585);
   assert.equal(november.deviceTargets.length, 15);
-  assert.equal(november.targetSource, "202611_Target by Brand Nov'26 V.1 B5.xlsx");
+  assert.equal(november.targetSource, "202611_Target by Brand Nov'26 V.2.xlsx");
   assert.equal(sheetRefreshInterval, 300000);
 });
 
@@ -71,7 +71,7 @@ test("November targets override feed targets and preserve October comparison sal
   assert.equal(row.dailyNet[0], 5000);
   assert.equal(row.previousDailyNet[0], 2400);
   assert.equal(november.hasMonthSales, true);
-  close(november.totals.targetNet, 99956261.94069129);
+  close(november.totals.targetNet, 101290261.65);
 });
 
 test("November target snapshot never leaks into another month", () => {
@@ -95,7 +95,7 @@ test("November weeks include both month boundaries", () => {
 
 test("August through November keep independent targets and sales", () => {
   const months = ["2026-08", "2026-09", "2026-10", "2026-11"];
-  const expectedNet = [50953089, 94539439, 139215088.76, 99956261.94069129];
+  const expectedNet = [50953089, 94539439, 139215088.76, 101290261.65];
   const sales = months.map((month, i) => ({ date: `${month}-03`, code: "80100478", shop: "True Shop Terminal 21", brand: "IPHONE", qty: i + 1, net: (i + 1) * 10000 }));
   const source = { ...fallbackData, latest: "2026-11-03", sales, modelSales: [] };
   months.forEach((month, i) => {

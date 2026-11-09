@@ -67,7 +67,7 @@ test("October target snapshot never leaks into another month", () => {
   assert.equal(august.deviceTargets.length, 15);
   assert.notEqual(august.targetSource, targets.source);
   const november = dashboardForMonth(fallbackData, "2026-11");
-  close(november.totals.targetNet, 99956261.94069129);
+  close(november.totals.targetNet, 101290261.65);
   assert.notEqual(november.targetSource, targets.source);
   assert.equal(dashboardForMonth(fallbackData, "2026-12").totals.targetNet, 0);
 });
