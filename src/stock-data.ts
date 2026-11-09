@@ -10,19 +10,19 @@ export type StockRow = {
 };
 
 export const focusModels = [
-  { key: "vivo-y05-4-64", label: "vivo Y05 4/64GB", brand: "VIVO", salesNames: ["VIVO Y05 4G 4/64GB"], stockPrefixes: ["H/S,VIVO,Y05,4G,4/64"] },
-  { key: "xiaomi-redmi-a7-pro-4-128", label: "Xiaomi Redmi A7 Pro 4/128GB", brand: "XIAOMI", salesNames: ["REDMI A7 PRO 4G 4/128GB"], stockPrefixes: ["H/S,XIAOMI,REDMI A7 PRO,4G,4/128GB"] },
-  { key: "honor-x5c-plus-4-128", label: "Honor X5c Plus 4/128GB", brand: "HONOR", salesNames: ["HONOR X5C PLUS 4G 4/128GB"], stockPrefixes: ["H/S,HONOR,X5C PLUS,4G,4/128GB"] },
-  { key: "infinix-smart20-4-64", label: "Infinix Smart 20 4/64GB", brand: "INFINIX", salesNames: ["INFINIX SMART 20 4G 4/64GB"], stockPrefixes: ["H/S,INFINIX,SMART 20,4G,4/64GB"] },
-  { key: "vivo-y31d-6-256", label: "vivo Y31D 6/256GB", brand: "VIVO", salesNames: ["VIVO Y31D 4G 6/256GB"], stockPrefixes: ["H/S,VIVO,Y31D,4G,6/256"] },
-  { key: "vivo-y11d-4-128", label: "vivo Y11D 4/128GB", brand: "VIVO", salesNames: ["VIVO Y11D 4G 4/128GB"], stockPrefixes: ["H/S,VIVO,Y11D,4G,4/128"] },
-  { key: "oppo-a6c-4-64", label: "OPPO A6C 4/64GB", brand: "OPPO", salesNames: ["OPPO A6C 4G 4/64GB"], stockPrefixes: ["H/S,OPPO,A6C,4G,4/64"] },
   { key: "oppo-a6c-4-128", label: "OPPO A6C 4/128GB", brand: "OPPO", salesNames: ["OPPO A6C 4G 4/128GB"], stockPrefixes: ["H/S,OPPO,A6C,4G,4/128"] },
+  { key: "infinix-smart20-4-64", label: "Infinix Smart 20 4/64GB", brand: "INFINIX", salesNames: ["INFINIX SMART 20 4G 4/64GB"], stockPrefixes: ["H/S,INFINIX,SMART 20,4G,4/64GB"] },
+  { key: "honor-x5c-plus-4-128", label: "Honor X5c Plus 4/128GB", brand: "HONOR", salesNames: ["HONOR X5C PLUS 4G 4/128GB"], stockPrefixes: ["H/S,HONOR,X5C PLUS,4G,4/128GB"] },
   { key: "samsung-a07s-4-64", label: "Samsung A07s 4/64GB", brand: "SAMSUNG", salesNames: ["GALAXY A07S 4G 4/64GB"], stockPrefixes: ["H/S,SS,GALAXY A07S,4G,4/64GB"] },
+  { key: "vivo-y05-4-64", label: "vivo Y05 4/64GB", brand: "VIVO", salesNames: ["VIVO Y05 4G 4/64GB"], stockPrefixes: ["H/S,VIVO,Y05,4G,4/64"] },
+  { key: "oppo-a6c-4-64", label: "OPPO A6C 4/64GB", brand: "OPPO", salesNames: ["OPPO A6C 4G 4/64GB"], stockPrefixes: ["H/S,OPPO,A6C,4G,4/64"] },
+  { key: "vivo-y11d-4-128", label: "vivo Y11D 4/128GB", brand: "VIVO", salesNames: ["VIVO Y11D 4G 4/128GB"], stockPrefixes: ["H/S,VIVO,Y11D,4G,4/128"] },
+  { key: "realme-note80-4-64", label: "Realme Note 80 4/64GB", brand: "REALME", salesNames: ["REALME NOTE 80 4G 4/64GB"], stockPrefixes: ["H/S,REALME NOTE 80,4G,4/64"] },
   { key: "infinix-smart20-4-128", label: "Infinix Smart 20 4/128GB", brand: "INFINIX", salesNames: ["INFINIX SMART 20 4G 4/128GB"], stockPrefixes: ["H/S,INFINIX,SMART 20,4G,4/128GB"] },
   { key: "xiaomi-redmi-a7-pro-4-64", label: "Xiaomi Redmi A7 Pro 4/64GB", brand: "XIAOMI", salesNames: ["REDMI A7 PRO 4G 4/64GB"], stockPrefixes: ["H/S,XIAOMI,REDMI A7 PRO,4G,4/64GB"] },
   { key: "samsung-a08-4-64", label: "Samsung A08 4/64GB", brand: "SAMSUNG", salesNames: ["GALAXY A08 4G 4/64GB"], stockPrefixes: ["H/S,SS,GALAXY A08,4G,4/64GB"] },
-  { key: "realme-note80-4-64", label: "Realme Note 80 4/64GB", brand: "REALME", salesNames: ["REALME NOTE 80 4G 4/64GB"], stockPrefixes: ["H/S,REALME NOTE 80,4G,4/64"] },
+  { key: "realme-c100-4g-4-128", label: "Realme C100 4G 4/128GB", brand: "REALME", salesNames: ["REALME C100 4G 4/128GB"], stockPrefixes: ["H/S,REALME,C100,4G,4/128GB"] },
+  { key: "tecno-pop20", label: "TECNO POP 20 (Focus)", brand: "TECNO", salesNames: ["TECNO POP 20"], stockPrefixes: ["H/S,TECNO,POP 20"] },
 ] as const;
 
 export type FocusStockKey = typeof focusModels[number]["key"];
@@ -44,6 +44,8 @@ function normalizedName(value: string) {
 
 export function focusSalesKey(model: string): FocusStockKey | null {
   const normalized = normalizedName(model);
+  // POP 20 was requested without a capacity; exclude other POP variants.
+  if (/^TECNO POP 20(?: 4G)?(?: \d+\/\d+GB)?$/.test(normalized)) return "tecno-pop20";
   return focusModels.find((definition) => definition.salesNames.some((name) => normalized === name))?.key ?? null;
 }
 

@@ -13,26 +13,26 @@ const { focusModels, focusSalesKey, focusStockKey, parseStockTable } = await imp
 test("defines the remaining 13 exact Model Focus devices", () => {
   assert.equal(focusModels.length, 13);
   assert.deepEqual(focusModels.map((model) => model.label), [
-    "vivo Y05 4/64GB",
-    "Xiaomi Redmi A7 Pro 4/128GB",
-    "Honor X5c Plus 4/128GB",
-    "Infinix Smart 20 4/64GB",
-    "vivo Y31D 6/256GB",
-    "vivo Y11D 4/128GB",
-    "OPPO A6C 4/64GB",
     "OPPO A6C 4/128GB",
+    "Infinix Smart 20 4/64GB",
+    "Honor X5c Plus 4/128GB",
     "Samsung A07s 4/64GB",
+    "vivo Y05 4/64GB",
+    "OPPO A6C 4/64GB",
+    "vivo Y11D 4/128GB",
+    "Realme Note 80 4/64GB",
     "Infinix Smart 20 4/128GB",
     "Xiaomi Redmi A7 Pro 4/64GB",
     "Samsung A08 4/64GB",
-    "Realme Note 80 4/64GB",
-  ]);
+    "Realme C100 4G 4/128GB",
+    "TECNO POP 20 (Focus)"
+]);
 });
 
 test("maps Daily Sales only when model and capacity match exactly", () => {
   assert.equal(focusSalesKey("GALAXY A06 5G 4/64GB"), null);
   assert.equal(focusSalesKey("REALME C100I 4G 4/128GB"), null);
-  assert.equal(focusSalesKey("VIVO Y31D 4G 6/256GB"), "vivo-y31d-6-256");
+  assert.equal(focusSalesKey("VIVO Y31D 4G 6/256GB"), null);
   assert.equal(focusSalesKey("OPPO A6C 4G 4/64GB"), "oppo-a6c-4-64");
   assert.equal(focusSalesKey("OPPO A6C 4G 4/128GB"), "oppo-a6c-4-128");
   assert.equal(focusSalesKey("INFINIX SMART 20 4G 4/128GB"), "infinix-smart20-4-128");
@@ -42,7 +42,7 @@ test("maps Daily Sales only when model and capacity match exactly", () => {
 
 test("maps Stock only from exact H/S device product names", () => {
   assert.equal(focusStockKey("H/S,SS,GALAXY A06,5G,4/64GB,BLACK"), null);
-  assert.equal(focusStockKey("H/S,XIAOMI,REDMI A7 PRO,4G,4/128GB,BLUE"), "xiaomi-redmi-a7-pro-4-128");
+  assert.equal(focusStockKey("H/S,XIAOMI,REDMI A7 PRO,4G,4/128GB,BLUE"), null);
   assert.equal(focusStockKey("H/S,INFINIX,SMART 20,4G,4/64GB,BLACK"), "infinix-smart20-4-64");
   assert.equal(focusStockKey("H/S,INFINIX,SMART 20,4G,4/128GB,BLACK"), "infinix-smart20-4-128");
   assert.equal(focusStockKey("H/S,REALME,C100i,4G,4/128GB,DUSK GREY"), null);
@@ -68,4 +68,17 @@ test("parses Stock rows and keeps only positive Focus stock", () => {
     balance: 2,
     amount: 11980,
   }]);
+});
+
+ test("new entry focus matches C100 4G only and POP 20 devices", () => {
+  assert.equal(focusSalesKey("REALME C100 4G 4/128GB"), "realme-c100-4g-4-128");
+  assert.equal(focusSalesKey("REALME C100 5G 4/128GB"), null);
+  assert.equal(focusStockKey("H/S,REALME,C100,4G,4/128GB,BLACK"), "realme-c100-4g-4-128");
+  assert.equal(focusStockKey("H/S,REALME,C100,5G,4/128GB,BLOOM PURPLE"), null);
+  assert.equal(focusSalesKey("TECNO POP 20 4G 4/128GB"), "tecno-pop20");
+  assert.equal(focusSalesKey("TECNO POP 20"), "tecno-pop20");
+  assert.equal(focusSalesKey("TECNO POP 20 PRO 4G 4/128GB"), null);
+  assert.equal(focusStockKey("H/S,TECNO,POP 20,4G,4/128GB,BLACK"), "tecno-pop20");
+  assert.equal(focusStockKey("H/S,TECNO,POP 20 PRO,4G,4/128GB,BLACK"), null);
+  assert.equal(focusStockKey("ACC,TECNO,POP 20,CASE"), null);
 });
